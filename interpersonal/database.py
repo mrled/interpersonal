@@ -12,9 +12,6 @@ from flask.cli import with_appcontext
 
 
 # TODO: authTokenUsed could be a foreign key?
-# Sellout has "C-" codes and "B-" codes. It stores them in the same Dynamo table.
-# I store C- codes in the ApplicationToken table,
-# and B- codes in the BearerToken table.
 CREATE_DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS AppSettings(
   key TEXT PRIMARY KEY,

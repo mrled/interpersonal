@@ -4,10 +4,9 @@ The connection between my little site and the Indie Web.
 
 ## Implementation
 
-Most code initially came from the Flask tutorial.
-
-I also benefitted greatly from looking at <https://unrelenting.technology>'s
-[Sellout Engine](https://github.com/unrelentingtech/sellout)
+This code benefitted greatly from <https://unrelenting.technology>'s
+[Sellout Engine](https://github.com/unrelentingtech/sellout),
+and also from the [Flask tutorial](https://flask.palletsprojects.com/en/2.0.x/tutorial/).
 
 ## Development
 
@@ -117,11 +116,14 @@ all of which might easily be termed "tokens" or "codes" or "secrets".
     this value is created from random data when the user logs in and authorizes a given app.
     It is stored in the `AuthorizationCode` table.
     Defined by the IndieAuth spec.
+    Sellout Engine prefixes these values with `C-`.
 * The bearer token: The application exchanges its authorization code for one of these.
     The exchange happens in `indieauth.bearer()`.
     Also created from random data.
     Stored in the `BearerToken` table.
+    (I'm not really issuiing bearer tokens yet, but I will eventually.)
     Defined by the IndieAuth spec.
+    Sellout Engine prefixes these values with `B-`.
 
 ## How to use this to authenticate to an application that understands IndieAuth?
 
