@@ -66,6 +66,7 @@ def close_db(e=None):
 def init_db():
     db = get_db()
     db.executescript(CREATE_DB_SCHEMA)
+    db.commit()
 
 
 # TODO: have a struct of AppSettings, don't rely on strings for keys?
@@ -82,6 +83,7 @@ def set_app_setting(key: str, value: typing.Any):
         "INSERT OR REPLACE INTO AppSettings(key, value) VALUES (?, ?);",
         (key, value),
     )
+    db.commit()
 
 
 def get_app_setting(key: str) -> typing.Any:

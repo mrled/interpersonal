@@ -74,10 +74,14 @@ def login(next=None):
             appsetting = db.execute(
                 "SELECT value FROM AppSettings WHERE key = 'login_password'"
             ).fetchone()
-            db_login_password = appsetting["value"]
 
-            if form_login_password != db_login_password:
-                error = f"Incorrect login token '{form_login_password}'"
+            if appsetting is None:
+                error = f"The database is not properly configured, cannot log in"
+
+            else:
+                db_login_password = appsetting["value"]
+                if form_login_password != db_login_password:
+                    error = f"Incorrect login token '{form_login_password}'"
 
             if error is None:
                 session.clear()
@@ -304,6 +308,7 @@ def grant():
             request.headers["host"],
         ),
     )
+    db.commit()
 
     current_app.logger.debug(
         f"Finished grant() function, redirecting to {redir_dest}..."
@@ -429,6 +434,7 @@ def bearer():
                 request.headers["host"],
             ),
         )
+        db.commit()
 
         response = {
             "me": database.get_app_setting("owner_profile"),
