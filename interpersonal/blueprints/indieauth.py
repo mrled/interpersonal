@@ -54,12 +54,8 @@ def index():
 
 
 @bp.route("/login", methods=("GET", "POST"))
-def login(next=None):
-    """Return the log in page
-
-    parameters:
-        next: Redirect to this page after successful login
-    """
+def login():
+    """Return the log in page"""
     if request.method == "POST":
         form_login_password = request.form.get("password", None)
 
@@ -84,7 +80,7 @@ def login(next=None):
             if error is None:
                 session.clear()
                 session[COOKIE_INDIE_AUTHED] = COOKIE_INDIE_AUTHED_VALUE
-                target = next or url_for("indieauth.index")
+                target = request.args.get(next, "indieauth.index")
                 current_app.logger.debug(f"Login successful, will redirect to {target}")
                 return redirect(target)
 
