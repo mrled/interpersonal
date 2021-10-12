@@ -4,6 +4,7 @@ import datetime
 import functools
 import hashlib
 import secrets
+import sqlite3
 
 import rfc3986
 from cryptography.hazmat.primitives import constant_time
@@ -374,7 +375,7 @@ def redeem_auth_code(
     redirect_uri: str,
     origin_host: str,
     code_verifier: str = "",
-):
+) -> sqlite3.Row:
     """Use an auth code
 
     Marks the code used and returns a new bearer token.
@@ -389,7 +390,7 @@ def redeem_auth_code(
     """
     db = database.get_db()
     row = db.execute(
-        "SELECT used, host, clientId, redirectUri, codeChallengeMethod, time FROM AuthorizationCode WHERE authorizationCode = ?",
+        "SELECT used, host, clientId, redirectUri, codeChallenge, codeChallengeMethod, time FROM AuthorizationCode WHERE authorizationCode = ?",
         (authorization_code,),
     ).fetchone()
     if not row:
@@ -421,8 +422,17 @@ def redeem_auth_code(
         "UPDATE AuthorizationCode SET used = 1 WHERE authorizationCode = ?",
         (authorization_code,),
     )
+    db.commit()
 
-    return row
+    # Get the same row back from the database again
+    # This means it'll pick up the change we made - setting it to used
+    # which is useful in testing
+    finalrow = db.execute(
+        "SELECT authorizationCode, used, host, clientId, redirectUri, codeChallenge, codeChallengeMethod, time FROM AuthorizationCode WHERE authorizationCode = ?",
+        (authorization_code,),
+    ).fetchone()
+
+    return finalrow
 
 
 @bp.route("/bearer")

@@ -4,8 +4,9 @@ import json
 import secrets
 
 from flask import session
+from flask.cli import with_appcontext
 
-from interpersonal import util
+from interpersonal import database, util
 from interpersonal.blueprints import indieauth
 
 
@@ -57,8 +58,6 @@ def test_authorize_GET(client, indieauthfix, testconstsfix):
         print("Response body:")
         print(response_GET.data.decode())
         raise exc
-
-    # TODO: test that the code gets recorded in the database properly
 
 
 def test_authorize_POST(client, indieauthfix, testconstsfix):
@@ -148,16 +147,16 @@ def test_authorize_GET_requires_auth(client, indieauthfix, testconstsfix):
     # TODO: test that the authorization code doesn't show up in the database too
 
 
-def test_grant(client, indieauthfix, testconstsfix):
+def test_grant(app, client, indieauthfix, testconstsfix):
     state = secrets.token_urlsafe(16)
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
-    authorize_uri = "/indieauth/grant"
+    grant_uri = "/indieauth/grant"
 
     indieauthfix.login()
 
     response = client.post(
-        authorize_uri,
+        grant_uri,
         data={
             "response_type": "code",
             "client_id": client_id,
@@ -170,11 +169,9 @@ def test_grant(client, indieauthfix, testconstsfix):
         },
     )
 
-    # assert response_GET.status_code == 200
-    # # Checking state is especially important, as it is used to prevent CSRF attacks
-    # assert state.encode() in response_GET.data
-    # assert client_id.encode() in response_GET.data
-    # assert redir_uri.encode() in response_GET.data
+    authorization_code = (
+        response.data.decode().split(f"{redir_uri}?code=")[1].split("&amp;")[0]
+    )
 
     try:
         assert response.status_code == 302
@@ -190,3 +187,62 @@ def test_grant(client, indieauthfix, testconstsfix):
         print("Response body:")
         print(response.data.decode())
         raise exc
+
+    with app.app_context():
+        db = database.get_db()
+        row = db.execute(
+            "SELECT authorizationCode, used, host, clientId, redirectUri, codeChallengeMethod, time FROM AuthorizationCode WHERE authorizationCode = ?",
+            (authorization_code,),
+        ).fetchone()
+    assert row["authorizationCode"] == authorization_code
+    assert row["used"] == 0
+
+
+def test_redeem_auth_code(app, client, indieauthfix, testconstsfix):
+    state = secrets.token_urlsafe(16)
+    client_id = "https://client.example.net/"
+    redir_uri = "https://client.example.net/redir/to/here"
+    grant_uri = "/indieauth/grant"
+
+    indieauthfix.login()
+
+    response = client.post(
+        grant_uri,
+        data={
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": redir_uri,
+            "state": state,
+            "code_challenge": None,
+            "code_challenge_method": None,
+            "me": testconstsfix.owner_profile,
+            "scope": "profile",
+        },
+    )
+
+    authorization_code = (
+        response.data.decode().split(f"{redir_uri}?code=")[1].split("&amp;")[0]
+    )
+
+    with app.app_context():
+        db = database.get_db()
+        row = db.execute(
+            "SELECT authorizationCode, used, host, clientId, redirectUri, codeChallengeMethod, time FROM AuthorizationCode WHERE authorizationCode = ?",
+            (authorization_code,),
+        ).fetchone()
+
+    assert row["authorizationCode"] == authorization_code
+    assert row["used"] == 0
+
+    # All of the above is just setup
+    # Now we can actually test redeem_auth_code
+
+    with app.app_context():
+        redeemed = indieauth.redeem_auth_code(
+            authorization_code, client_id, redir_uri, "localhost"
+        )
+        assert redeemed["authorizationCode"] == authorization_code
+        assert redeemed["host"] == "localhost"
+        assert redeemed["clientId"] == client_id
+        assert redeemed["redirectUri"] == redir_uri
+        assert redeemed["used"] == 1
