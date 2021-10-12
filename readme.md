@@ -19,8 +19,9 @@ pip install -e .
 ```
 
 Run in development mode.
-Note that you can set the owner profile to a dummy example URL and most things will work;
-you can also set it to a live site or a site you're running locally.
+Note that you can set the owner profile to a dummy example URL
+and still see some pages and make all the tests work.
+You can also set it to a live site or a site you're running locally.
 
 ```sh
 
