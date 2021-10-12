@@ -1,3 +1,4 @@
+import logging
 import os
 
 from flask import Flask
@@ -10,6 +11,7 @@ def create_app(
     test_config=None,
     dbpath=os.environ.get("INTERPERSONAL_DATABASE"),
     cookey=os.environ.get("INTERPERSONAL_COOKIE_SECRET_KEY"),
+    loglevel=os.environ.get("INTERPERSONAL_LOG_LEVEL", "INFO"),
 ):
 
     if not dbpath:
@@ -18,6 +20,8 @@ def create_app(
         raise Exception("Missing cookie secret key")
 
     app = Flask(__name__, instance_relative_config=True)
+
+    app.logger.setLevel(logging.getLevelName(loglevel))
 
     # Note that the keys here must be in all caps
     app.config.from_mapping(

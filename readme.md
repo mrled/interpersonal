@@ -81,6 +81,7 @@ from interpersonal import create_app
 application = create_app(
     dbpath="/path/to/interpersonal.db",
     cookey="your-generated-value-previously",
+    loglevel="DEBUG", # optional
 )
 ```
 

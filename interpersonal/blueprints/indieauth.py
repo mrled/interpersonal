@@ -84,7 +84,9 @@ def login(next=None):
             if error is None:
                 session.clear()
                 session[COOKIE_INDIE_AUTHED] = COOKIE_INDIE_AUTHED_VALUE
-                return redirect(next or url_for("indieauth.index"))
+                target = next or url_for("indieauth.index")
+                current_app.logger.debug(f"Login successful, will redirect to {target}")
+                return redirect(target)
 
         flash(error)
 
@@ -113,6 +115,9 @@ def indieauth_required(view):
     @functools.wraps(view)
     def wrapped_view(**kwargs):
         if not g.indieauthed:
+            current_app.logger.debug(
+                f"Attempted to visit {request.url} without logging in; redirecting to login page first..."
+            )
             return redirect(url_for("indieauth.login", next=request.url))
 
         return view(**kwargs)
@@ -336,14 +341,14 @@ def redeem_auth_code(
     """
     db = database.get_db()
     row = db.execute(
-        "SELECT used, host, clientId, redirectUri, codeChallengeMethod FROM AuthorizationCode WHERE authorizationCode = ?",
+        "SELECT used, host, clientId, redirectUri, codeChallengeMethod, time FROM AuthorizationCode WHERE authorizationCode = ?",
         (authorization_code,),
     ).fetchone()
     if not row:
         return render_error(400, f"Invalid auth code '{authorization_code}'")
 
     if (
-        datetime.utcnow() - row["time"] > datetime.timedelta(minutes=5)
+        datetime.datetime.utcnow() - row["time"] > datetime.timedelta(minutes=5)
         or client_id != row["clientId"]
         or redirect_uri != row["redirectUri"]
         or row["used"]
@@ -425,7 +430,7 @@ def bearer():
             database.INSERT_BEARER_TOKEN_SQL,
             (
                 bearer_token,
-                datetime.utcnow(),
+                datetime.datetime.utcnow(),
                 code_row["authenticationToken"],
                 code_row["clientId"],
                 code_row["scopes"],
