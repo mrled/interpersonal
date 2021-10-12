@@ -1,0 +1,3 @@
+graft interpersonal/static
+graft interpersonal/templates
+global-exclude *.pyc

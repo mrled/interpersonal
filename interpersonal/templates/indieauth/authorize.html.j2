@@ -1,0 +1,40 @@
+{% extends "_base.html.j2" %}
+{% block title %}Authorize{% endblock %}
+
+{% block content %}
+  <main>
+    <form method="POST" action="{{ url_for('indieauth.grant') }}">
+      <input hidden name="state" type="hidden" value="{{ state }}" />
+      <input hidden name="redirect_uri" type="hidden" value="{{ redirect_uri }}" />
+      <input hidden name="client_id" type="hidden" value="{{ client_id }}" />
+      <input hidden name="code_challenge" type="hidden" value="{{ code_challenge }}" />
+      <input hidden name="code_challenge_method" type="hidden" value="{{ code_challenge_method }}" />
+      <p>If you allow, the application</p>
+      <p><a href="{{ client_id }}">{{ client_id }}</a></p>
+      <p>will be given the following permissions:</p>
+
+      {% for scope, desc in scope_info.items() %}
+      <div>
+        <input
+          id="checkbox-scope-{{ scope }}"
+          name="scope:{{ scope }}"
+          type="checkbox"
+          {% if scope in requested_scope_list %}checked{% endif %}
+        />
+        <label for="checkbox-scope-{{ scope }}"><strong>{{ scope }}</strong> — {{ desc }}</label>
+      </div>
+      {% endfor %}
+
+      <p>
+        You will be redirected to the following address:
+        <pre>{{ redirect_uri }}</pre>
+      </p>
+
+      {% if code_challenge_method != "S256" %}
+        <p>Security warning: the client did not use PKCE S256 for this request.</p>
+      {% endif %}
+
+      <button type="submit">Ok</button><br><br>
+    </form>
+  </main>
+{% endblock %}

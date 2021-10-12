@@ -1,0 +1,16 @@
+{% extends "_base.html.j2" %}
+
+{% block header %}
+  <h1>{% block title %}Interpersonal IndieAuth{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+  <div>
+    <p>Welcome to Interpersonal IndieAuth</p>
+    {% if g.indieauthed %}
+    <p>You are logged in</p>
+    {% else %}
+    <p>You are logged out</p>
+    {% endif %}
+  </div>
+{% endblock %}

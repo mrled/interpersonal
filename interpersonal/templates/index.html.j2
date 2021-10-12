@@ -1,0 +1,14 @@
+{% extends "_base.html.j2" %}
+
+{% block header %}
+  <h1>{% block title %}Interpersonal{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+  <div>
+    <p>Welcome to Interpersonal, the connection between my little site and the indie web</p>
+    <p>The site owner may wish to <a href="{{ url_for('indieauth.login') }}">log in with IndieAuth</a>.</p>
+    <p><a href="https://github.com/mrled/interpersonal">Interpersonal is open source</a>.</p>
+    <p>Written with ❤️ by <a href="https://me.micahrl.com/">Micah</a>.</p>
+  </div>
+{% endblock %}

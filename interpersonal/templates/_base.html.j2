@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Interpersonal{% endblock %}</title>
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+  </head>
+  <body>
+    <nav>
+      <h1>Interpersonal</h1>
+      <ul>
+        {% if g.indieauthed %}
+        <li><a href="{{ url_for('indieauth.logout') }}">Log Out</a></li>
+        {% else %}
+        <li><a href="{{ url_for('indieauth.login') }}">Log In</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+    <section class="content">
+      <header>
+        {% block header %}{% endblock %}
+      </header>
+      {% for message in get_flashed_messages() %}
+        <div class="flash">{{ message }}</div>
+      {% endfor %}
+      {% block content %}{% endblock %}
+    </section>
+  </body>
+</html>

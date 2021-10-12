@@ -1,0 +1,14 @@
+{% extends "_base.html.j2" %}
+
+{% block header %}
+  <h1>{% block title %}Log In{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+  <form method="POST">
+    <label for="password">Login password</label>
+    <input hidden name="next" type="hidden" value="{{ next }}" />
+    <input type="password" name="password" required>
+    <input type="submit" value="Log In">
+  </form>
+{% endblock %}
