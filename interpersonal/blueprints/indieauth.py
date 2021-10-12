@@ -19,8 +19,6 @@ from flask import (
     session,
     url_for,
 )
-from werkzeug.exceptions import HTTPException
-from werkzeug.urls import url_encode
 
 from interpersonal import database, util
 
@@ -115,7 +113,7 @@ def indieauth_required(view):
     @functools.wraps(view)
     def wrapped_view(**kwargs):
         if not g.indieauthed:
-            return redirect(url_for("indieauth.login"))
+            return redirect(url_for("indieauth.login", next=request.url))
 
         return view(**kwargs)
 
