@@ -411,9 +411,11 @@ def redeem_auth_code(
 
         # You can add the == padding even if it is not necessary
         # <https://stackoverflow.com/a/49459036>
+        # TODO: Test this code
+        # I don't understand the codeChallenge stuff, so I don't test it yet.
         decoded_code_challenge = base64.urlsafe_b64decode(row["codeChallenge"] + "==")
         if not constant_time.bytes_eq(
-            hashlib.sha256(code_verifier).digest(),
+            hashlib.sha256(code_verifier.encode()).digest(),
             decoded_code_challenge,
         ):
             return render_error(400, "Invalid grant: code_verified didn't match")
