@@ -18,6 +18,7 @@ from flask import (
     request,
     session,
     url_for,
+    wrappers,
 )
 
 from interpersonal import database, util
@@ -37,6 +38,17 @@ SCOPE_INFO = {
 }
 COOKIE_INDIE_AUTHED = "indie_authed"
 COOKIE_INDIE_AUTHED_VALUE = "indied (indeed) (lol)"
+ALL_HTTP_METHODS = [
+    "GET",
+    "HEAD",
+    "POST",
+    "PUT",
+    "DELETE",
+    "CONNECT",
+    "OPTIONS",
+    "TRACE",
+    "PATCH",
+]
 
 
 def render_error(errcode: int, errmsg: str):
@@ -105,8 +117,14 @@ def logout():
     return redirect(url_for("indieauth.index"))
 
 
-def indieauth_required(view):
-    """A decorator to indicate that IndieAuth login is requires for a given route"""
+def indieauth_required_all_methods(view):
+    """A decorator to indicate that IndieAuth login is required for a given route.
+
+    This decorator requires authentication for all HTTP methods
+
+    Note that unlike the `indieauth_required()` decorator,
+    this decorator does not take arguments, and is simpler.
+    """
 
     @functools.wraps(view)
     def wrapped_view(**kwargs):
@@ -119,6 +137,37 @@ def indieauth_required(view):
         return view(**kwargs)
 
     return wrapped_view
+
+
+def indieauth_required(methods):
+    """A decorator to indicate that IndieAuth login is required for a given route
+
+    Can protect only some methods by passing methods=[...list...]
+
+    WARNING: Decorator functions that take arguments, like this one does,
+    must take only positional arguments!
+    If there is a default value for the methods argument,
+    Flask will give erros like:
+
+        AssertionError: View function mapping is overwriting an existing endpoint function: indieauth.decorator
+
+    An example of working code:
+    <https://stackoverflow.com/questions/54032502/decorators-with-arguments-with-flask>
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if request.method in methods and not g.indieauthed:
+                current_app.logger.debug(
+                    f"Attempted to visit {request.url} without logging in; redirecting to login page first..."
+                )
+                return redirect(url_for("indieauth.login", next=request.url))
+            return func(**kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 def authorize_GET(
@@ -201,9 +250,12 @@ def authorize_POST(
 
 
 @bp.route("/authorize", methods=["GET", "POST"])
-@indieauth_required
+@indieauth_required(["GET"])
 def authorize():
     """The IndieAuth authorization endpoint
+
+    Note that the GET method requires authorization,
+    but the POST method is used by an IndieAuth client and thus authorization is not required.
 
     For the GET endpoint:
 
@@ -256,7 +308,7 @@ def authorize():
 
 
 @bp.route("/grant", methods=["POST"])
-@indieauth_required
+@indieauth_required(ALL_HTTP_METHODS)
 def grant():
     """Grant permission to another site with IndieAuth
 
@@ -374,7 +426,7 @@ def redeem_auth_code(
 
 
 @bp.route("/bearer")
-@indieauth_required
+@indieauth_required(ALL_HTTP_METHODS)
 def bearer():
     """The IndieAuth bearer token endpoint
 

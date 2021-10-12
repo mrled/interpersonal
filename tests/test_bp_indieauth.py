@@ -1,7 +1,6 @@
 """Tests for the IndieAuth blueprint"""
 
 import json
-import re
 import secrets
 
 from flask import session
@@ -76,6 +75,12 @@ def test_authorize_POST(client, indieauthfix, testconstsfix):
         response_grant.data.decode().split("code=")[1].split("&amp;state=")[0]
     )
 
+    # The POST method for this endpoint does not require cookies.
+    # This because it is called by the IndieAuth client to verify permissions with the 'profile' scope.
+    # It is not called by the user's browser and will not have the user's login cookies.
+    # See also: <https://indieauth.spec.indieweb.org/#request>
+    client.cookie_jar.clear()
+
     response_POST = client.post(
         authorize_uri,
         data={
@@ -103,6 +108,44 @@ def test_authorize_POST(client, indieauthfix, testconstsfix):
         print("Response body:")
         print(json.dumps(response_POST_json, indent=2, sort_keys=True))
         raise exc
+
+
+def test_authorize_GET_requires_auth(client, indieauthfix, testconstsfix):
+    state = secrets.token_urlsafe(16)
+    client_id = "https://client.example.net/"
+    redir_uri = "https://client.example.net/redir/to/here"
+    authorize_uri = "/indieauth/authorize"
+
+    response_GET = client.get(
+        util.uri(
+            authorize_uri,
+            {
+                "response_type": "code",
+                "client_id": client_id,
+                "redirect_uri": redir_uri,
+                "state": state,
+                "code_challenge": None,
+                "code_challenge_method": None,
+                "me": testconstsfix.owner_profile,
+                "scope": "profile",
+            },
+        )
+    )
+
+    try:
+        assert response_GET.status_code == 302
+        # Checking state is especially important, as it is used to prevent CSRF attacks
+        assert (
+            b"You should be redirected automatically to target URL" in response_GET.data
+        )
+        assert b'<a href="/indieauth/login' in response_GET.data
+    except BaseException as exc:
+        print("Failed GET tests!")
+        print("Response body:")
+        print(response_GET.data.decode())
+        raise exc
+
+    # TODO: test that the authorization code doesn't show up in the database too
 
 
 def test_grant(client, indieauthfix, testconstsfix):
