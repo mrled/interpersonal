@@ -80,7 +80,7 @@ def login():
             if error is None:
                 session.clear()
                 session[COOKIE_INDIE_AUTHED] = COOKIE_INDIE_AUTHED_VALUE
-                target = request.args.get(next, "indieauth.index")
+                target = request.args.get("next", url_for("indieauth.index"))
                 current_app.logger.debug(f"Login successful, will redirect to {target}")
                 return redirect(target)
 
