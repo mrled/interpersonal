@@ -6,13 +6,23 @@ from interpersonal import database
 from interpersonal.blueprints import indieauth, root
 
 
-def create_app(test_config=None):
+def create_app(
+    test_config=None,
+    dbpath=os.environ.get("INTERPERSONAL_DATABASE"),
+    cookey=os.environ.get("INTERPERSONAL_COOKIE_SECRET_KEY"),
+):
+
+    if not dbpath:
+        raise Exception("Missing dbpath")
+    if not cookey:
+        raise Exception("Missing cookie secret key")
+
     app = Flask(__name__, instance_relative_config=True)
 
     # Note that the keys here must be in all caps
     app.config.from_mapping(
-        DBPATH=os.environ["INTERPERSONAL_DATABASE"],
-        SECRET_KEY=os.environ["INTERPERSONAL_COOKIE_SECRET_KEY"],
+        DBPATH=dbpath,
+        SECRET_KEY=cookey,
     )
 
     if test_config is not None:

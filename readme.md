@@ -70,17 +70,18 @@ flask set-owner-profile YOUR-REAL-INDIEWEB-PROFILE-URI
 echo "$INTERPERSONAL_COOKIE_SECRET_KEY"
 ```
 
-Then create a WSGI file that uses the virtual environment,
-e.g. /var/www/interpersonal/interpersonal.wsgi
+Then create a WSGI file.
+Note that you must hard-code the database path and cookie key.
+(You might think that you can instead use environment variables
+with Apache's `SetEnv`, but this doesn't work:
+<https://stackoverflow.com/questions/9016504/apache-setenv-not-working-as-expected-with-mod-wsgi>.)
 
 ```py
-import os
-activate_this = os.path.expanduser("/path/to/interpersonal.venv/bin/activate_this.py")
-execfile(activate_this, dict(__file__=activate_this))
-
 from interpersonal import create_app
-application = create_app()
-
+application = create_app(
+    dbpath="/path/to/interpersonal.db",
+    cookey="your-generated-value-previously",
+)
 ```
 
 Finally, configure Apache to call the WSGI file:
@@ -89,11 +90,9 @@ Finally, configure Apache to call the WSGI file:
 <VirtualHost *>
     ServerName example.com
 
-    SetEnv INTERPERSONAL_DATABASE /path/to/interpersonal.db
-    SetEnv INTERPERSONAL_COOKIE_SECRET_KEY your-generated-value-previously
-
-    WSGIDaemonProcess interpersonal user=user1 group=group1 threads=5
-    WSGIScriptAlias / /var/www/interpersonal/interpersonal.wsgi
+    WSGIDaemonProcess interpersonal user=user1 group=group1 threads=5 \
+        python-home=/path/to/interpersonal.venv
+    WSGIScriptAlias / /var/www/interpersonal/interpersonal.wsgi.py
 
     <Directory /var/www/interpersonal>
         WSGIProcessGroup interpersonal
