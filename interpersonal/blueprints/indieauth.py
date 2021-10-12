@@ -437,72 +437,72 @@ def redeem_auth_code(
     return finalrow
 
 
-@bp.route("/bearer")
-@indieauth_required(ALL_HTTP_METHODS)
-def bearer():
-    """The IndieAuth bearer token endpoint
+# TODO: This is unfinished and untested
 
-    After the user authorizes the client via the authorization endpoint,
-    the client exchanges the authorization code it got
-    for an access token by making a POST request to this endpoint.
+# @bp.route("/bearer")
+# @indieauth_required(ALL_HTTP_METHODS)
+# def bearer():
+#     """The IndieAuth bearer token endpoint
 
-    Marks the authorization code as used.
+#     After the user authorizes the client via the authorization endpoint,
+#     the client exchanges the authorization code it got
+#     for an access token by making a POST request to this endpoint.
 
-    TODO: This is unfinished and untested
-    """
+#     Marks the authorization code as used.
+#     """
 
-    # TODO: do we actually need a GET for this? I don't think this is in the spec.
-    # Sellout Engine does have a GET though, in addition to a POST like I implement below:
-    # if request.method == "GET":
-    #     result = {
-    #         'me': database.get_app_setting("owner_profile"),
-    #         'client_id':
-    #     }
-    #     resp = profile(request)
-    #     bd = request.scope["bearer_data"]
-    #     resp["client_id"] = bd["client_id"]
-    #     resp["scope"] = " ".join(bd["scopes"])
-    #     return JSONResponse(resp)
+#     # TODO: do we actually need a GET for this? I don't think this is in the spec.
+#     # Sellout Engine does have a GET though, in addition to a POST like I implement below:
+#     # if request.method == "GET":
+#     #     result = {
+#     #         'me': database.get_app_setting("owner_profile"),
+#     #         'client_id':
+#     #     }
+#     #     resp = profile(request)
+#     #     bd = request.scope["bearer_data"]
+#     #     resp["client_id"] = bd["client_id"]
+#     #     resp["scope"] = " ".join(bd["scopes"])
+#     #     return JSONResponse(resp)
 
-    if request.method == "POST":
-        db = database.get_db()
+#     if request.method == "POST":
+#         db = database.get_db()
 
-        if request.form.get("action") == "revoke":
-            token = request.form["token"]
-            tokRow = db.execute(
-                "SELECT host from BearerToken WHERE token = ?", (token,)
-            ).fetchone()
-            if tokRow["host"] == request.headers["host"]:
-                db.execute(
-                    "UPDATE BearerToken SET revoked 1 WHERE token = ?;", (token,)
-                )
-            return
-        code_row = redeem_auth_code(
-            request.form["code"],
-            request.form["client_id"],
-            request.form["redirect_uri"],
-            request.headers["host"],
-            request.form.get("code_verifier"),
-        )
-        bearer_token = secrets.token_urlsafe(16)
+#         if request.form.get("action") == "revoke":
+#             token = request.form["token"]
+#             tokRow = db.execute(
+#                 "SELECT host from BearerToken WHERE token = ?", (token,)
+#             ).fetchone()
+#             if tokRow["host"] == request.headers["host"]:
+#                 db.execute(
+#                     "UPDATE BearerToken SET revoked 1 WHERE token = ?;", (token,)
+#                 )
+#             return
+#         code_row = redeem_auth_code(
+#             request.form["code"],
+#             request.form["client_id"],
+#             request.form["redirect_uri"],
+#             request.headers["host"],
+#             request.form.get("code_verifier"),
+#         )
+#         bearer_token = secrets.token_urlsafe(16)
 
-        db.execute(
-            database.INSERT_BEARER_TOKEN_SQL,
-            (
-                bearer_token,
-                datetime.datetime.utcnow(),
-                code_row["authenticationToken"],
-                code_row["clientId"],
-                code_row["scopes"],
-                request.headers["host"],
-            ),
-        )
-        db.commit()
+#         db.execute(
+#             database.INSERT_BEARER_TOKEN_SQL,
+#             (
+#                 bearer_token,
+#                 datetime.datetime.utcnow(),
+#                 code_row["authenticationToken"],
+#                 code_row["clientId"],
+#                 code_row["scopes"],
+#                 request.headers["host"],
+#             ),
+#         )
+#         db.commit()
 
-        response = {
-            "me": database.get_app_setting("owner_profile"),
-            "token_type": "bearer",
-            "access_token": bearer_token,
-            "scope": " ".join(code_row["scopes"]),
-        }
-        return jsonify(response)
+#         response = {
+#             "me": database.get_app_setting("owner_profile"),
+#             "token_type": "bearer",
+#             "access_token": bearer_token,
+#             "scope": " ".join(code_row["scopes"]),
+#         }
+#         return jsonify(response)
