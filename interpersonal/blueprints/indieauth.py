@@ -107,28 +107,6 @@ def logout():
     return redirect(url_for("indieauth.index"))
 
 
-def indieauth_required_all_methods(view):
-    """A decorator to indicate that IndieAuth login is required for a given route.
-
-    This decorator requires authentication for all HTTP methods
-
-    Note that unlike the `indieauth_required()` decorator,
-    this decorator does not take arguments, and is simpler.
-    """
-
-    @functools.wraps(view)
-    def wrapped_view(**kwargs):
-        if not g.indieauthed:
-            current_app.logger.debug(
-                f"Attempted to visit {request.url} without logging in; redirecting to login page first..."
-            )
-            return redirect(url_for("indieauth.login", next=request.url))
-
-        return view(**kwargs)
-
-    return wrapped_view
-
-
 def indieauth_required(methods):
     """A decorator to indicate that IndieAuth login is required for a given route
 
@@ -148,12 +126,15 @@ def indieauth_required(methods):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
+            current_app.logger.debug(
+                f"@indieauth_required({methods}) wraps urlfunc {func.__name__}. request.method: {request.method}; g.indieauthed: {g.indieauthed}."
+            )
             if request.method in methods and not g.indieauthed:
                 current_app.logger.debug(
                     f"Attempted to visit {request.url} without logging in; redirecting to login page first..."
                 )
                 return redirect(url_for("indieauth.login", next=request.url))
-            return func(**kwargs)
+            return func(*args, **kwargs)
 
         return wrapper
 
@@ -297,7 +278,7 @@ def authorize():
 
 
 @bp.route("/grant", methods=["POST"])
-@indieauth_required_all_methods
+@indieauth_required(ALL_HTTP_METHODS)
 def grant():
     """Grant permission to another site with IndieAuth
 
