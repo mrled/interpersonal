@@ -1,0 +1,19 @@
+{% extends "_base.html.j2" %}
+
+{% block header %}
+  <h1>{% block title %}Interpersonal Micropub Blogs{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+  <div>
+    <p>List of blogs this Interpersonal instance can post to</p>
+    <ul>
+      {% for blog in blogs %}
+        <li>
+          <p>{{ blog.name }}</p>
+          <p><a href="{{ blog.uri }}">URI</a></p>
+          <p><a href="https://github.com/{{ blog.github_repo }}">Repo</a></p>
+        </li>
+      {% endfor %}
+  </div>
+{% endblock %}

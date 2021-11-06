@@ -22,6 +22,7 @@ setuptools.setup(
         "flask",
         "pytest",
         "pyyaml",
+        "requests",
         "rfc3986",
     ],
 )
