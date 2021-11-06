@@ -1,0 +1,15 @@
+---
+
+loglevel: DEBUG
+database: dev.db
+password: secret p@ss
+owner_profile: http://example.com
+cookie_secret_key: any value is fine in dev, even this literal string
+blogs:
+  - name: example
+    type: built-in example
+  # - name: example-blog
+  #   type: github
+  #   uri: https://blog.example.com/
+  #   github_repo: youruser/blogrepo
+  #   github_token: 12345ASDFG

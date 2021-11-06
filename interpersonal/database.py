@@ -1,3 +1,5 @@
+import collections
+import dataclasses
 import os
 import sqlite3
 import typing
@@ -40,6 +42,13 @@ CREATE TABLE IF NOT EXISTS BearerToken(
   host TEXT NOT NULL,
   revoked boolean DEFAULT FALSE
 );
+
+CREATE TABLE IF NOT EXISTS Blogs(
+  name TEXT PRIMARY KEY,
+  uri TEXT NOT NULL,
+  githubRepo TEXT NOT NULL,
+  githubToken TEXT NOT NULL
+);
 """
 
 
@@ -66,35 +75,6 @@ def init_db():
     db.commit()
 
 
-# TODO: have a struct of AppSettings, don't rely on strings for keys?
-
-
-def set_app_setting(key: str, value: typing.Any):
-    """Set a single application setting
-
-    key: The name of the setting
-    Value: The new value for the setting
-    """
-    db = get_db()
-    db.execute(
-        "INSERT OR REPLACE INTO AppSettings(key, value) VALUES (?, ?);",
-        (key, value),
-    )
-    db.commit()
-
-
-def get_app_setting(key: str) -> typing.Any:
-    """Retrieve a value from the application settings table
-
-    key: The name of the setting
-    """
-    db = get_db()
-    result = db.execute(
-        "SELECT value FROM AppSettings WHERE key = ?", (key,)
-    ).fetchone()
-    return result["value"]
-
-
 @click.command("init-db")
 @with_appcontext
 def init_db_command():
@@ -103,27 +83,9 @@ def init_db_command():
     click.echo("Initialized the database.")
 
 
-@click.command("set-login-password")
-@click.argument("password")
-@with_appcontext
-def set_login_password_command(password):
-    """Set the IndieAuth login password to PASSWORD"""
-    set_app_setting("login_password", password)
-
-
-@click.command("set-owner-profile")
-@click.argument("uri")
-@with_appcontext
-def set_owner_profile_command(uri):
-    """Set the IndieAuth site owner profile uri to URI"""
-    set_app_setting("owner_profile", uri)
-
-
 def init_app(app):
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
-    app.cli.add_command(set_login_password_command)
-    app.cli.add_command(set_owner_profile_command)
 
 
 INSERT_AUTHORIZATION_CODE_SQL = """
@@ -148,6 +110,6 @@ INSERT INTO BearerToken(
   authTokenUsed,
   clientId,
   scopes,
-  host,
+  host
 ) VALUES (?, ?, ?, ?, ?, ?);
 """

@@ -22,15 +22,11 @@ Run in development mode.
 Note that you can set the owner profile to a dummy example URL
 and still see some pages and make all the tests work.
 You can also set it to a live site or a site you're running locally.
+See `dev.conf.yml` for configuration.
 
 ```sh
-
-export INTERPERSONAL_DATABASE="dev.db"
-export INTERPERSONAL_COOKIE_SECRET_KEY="any value is ok in dev"
-export FLASK_APP=interpersonal
+. dev.env
 flask init-db  # Initialize the database
-flask set-login-password YOUR-NEW-PASSWORD  # Allow logging in locally
-flask set-owner-profile http://you.example.org/  # Set the owner profile
 flask run --debugger  # Run the webserver
 ```
 
@@ -48,6 +44,16 @@ coverage report
 ## Production
 
 Interpersonal is a pretty standard Flask app.
+
+First, write a config file somewhere.
+See `dev.config.yml` for an example.
+To create a good cookie secret, run something like:
+
+```sh
+python3 -c 'import base64, os; print(base64.b64encode(os.urandom(32)).decode())'
+```
+
+
 Create a virtual environment somewhere and install dependencies,
 then configure the app:
 
@@ -58,13 +64,10 @@ python3 -m venv /path/to/interpersonal.venv
 cd /path/to/interpersonal-git-repo
 pip install -e .
 
-export INTERPERSONAL_DATABASE="/path/to/interpersonal.db"
-export INTERPERSONAL_COOKIE_SECRET_KEY="$(python3 -c 'import base64, os; print(base64.b64encode(os.urandom(32)).decode())')"
+export INTERPERSONAL_CONFIG=/path/to/interpersonal.config.yml
 export FLASK_APP=interpersonal
 
 flask init-db
-flask set-login-password YOUR-NEW-PASSWORD
-flask set-owner-profile YOUR-REAL-INDIEWEB-PROFILE-URI
 
 # Make note of this secret key, it is used in apache config later
 echo "$INTERPERSONAL_COOKIE_SECRET_KEY"
@@ -78,11 +81,7 @@ with Apache's `SetEnv`, but this doesn't work:
 
 ```py
 from interpersonal import create_app
-application = create_app(
-    dbpath="/path/to/interpersonal.db",
-    cookey="your-generated-value-previously",
-    loglevel="DEBUG", # optional
-)
+application = create_app(configpath="/path/to/interpersonal.config.yml")
 ```
 
 Finally, configure Apache to call the WSGI file:
@@ -130,4 +129,4 @@ all of which might easily be termed "tokens" or "codes" or "secrets".
 
 * Deploy it for production (per above) and note the URI, like `interpersonal.example.com`.
 * On your own website at your own domain, add a link with the appropriate `rel` attribute, like
-    `   <link rel="authorization_endpoint" href="https://interpersonal.example.com/indieauth/authorize">`
+  `<link rel="authorization_endpoint" href="https://interpersonal.example.com/indieauth/authorize">`

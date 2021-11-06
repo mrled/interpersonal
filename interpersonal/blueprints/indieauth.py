@@ -76,21 +76,10 @@ def login():
             error = "No password passed to form"
 
         else:
-            db = database.get_db()
-            error = None
-            appsetting = db.execute(
-                "SELECT value FROM AppSettings WHERE key = 'login_password'"
-            ).fetchone()
-
-            if appsetting is None:
-                error = f"The database is not properly configured, cannot log in"
-
+            config_login_password = current_app.config["APPCONFIG"].password
+            if form_login_password != config_login_password:
+                error = f"Incorrect login token '{form_login_password}'"
             else:
-                db_login_password = appsetting["value"]
-                if form_login_password != db_login_password:
-                    error = f"Incorrect login token '{form_login_password}'"
-
-            if error is None:
                 session.clear()
                 session[COOKIE_INDIE_AUTHED] = COOKIE_INDIE_AUTHED_VALUE
                 target = request.args.get("next", url_for("indieauth.index"))
@@ -238,14 +227,13 @@ def authorize_POST(
     redeem_auth_code(
         authorization_code, client_id, redirect_uri, origin_host, code_verifier
     )
-    profile = database.get_app_setting("owner_profile")
     return jsonify(
         {
             "client_id": client_id,
             "redirect_uri": redirect_uri,
             "code_challenge": code_challenge,
             "code_challenge_method": code_challenge_method,
-            "me": profile,
+            "me": current_app.config["APPCONFIG"].owner_profile,
         }
     )
 
@@ -309,7 +297,7 @@ def authorize():
 
 
 @bp.route("/grant", methods=["POST"])
-@indieauth_required(ALL_HTTP_METHODS)
+@indieauth_required_all_methods
 def grant():
     """Grant permission to another site with IndieAuth
 
@@ -331,6 +319,9 @@ def grant():
         return render_error(400, "Must pass all of client_id, redirect_uri, state")
 
     scopes = [s for s in SCOPE_INFO.keys() if request.form.get("scope:" + s) == "on"]
+    current_app.logger.debug(
+        f"In grant(). SCOPE_INFO.keys(): {SCOPE_INFO.keys()} Form: {request.form}. Enabled scopes: {scopes}"
+    )
     authorization_code = secrets.token_urlsafe(16)
 
     # Described here
@@ -430,7 +421,7 @@ def redeem_auth_code(
     # This means it'll pick up the change we made - setting it to used
     # which is useful in testing
     finalrow = db.execute(
-        "SELECT authorizationCode, used, host, clientId, redirectUri, codeChallenge, codeChallengeMethod, time FROM AuthorizationCode WHERE authorizationCode = ?",
+        "SELECT authorizationCode, time, clientId, redirectUri, codeChallenge, codeChallengeMethod, scopes, host, used FROM AuthorizationCode WHERE authorizationCode = ?",
         (authorization_code,),
     ).fetchone()
 
@@ -439,70 +430,93 @@ def redeem_auth_code(
 
 # TODO: This is unfinished and untested
 
-# @bp.route("/bearer")
-# @indieauth_required(ALL_HTTP_METHODS)
-# def bearer():
-#     """The IndieAuth bearer token endpoint
 
-#     After the user authorizes the client via the authorization endpoint,
-#     the client exchanges the authorization code it got
-#     for an access token by making a POST request to this endpoint.
+def bearer_GET():
+    """Handle a GET request for the bearer endpoint
 
-#     Marks the authorization code as used.
-#     """
+    GET requests are used to verify a token that the client has.
 
-#     # TODO: do we actually need a GET for this? I don't think this is in the spec.
-#     # Sellout Engine does have a GET though, in addition to a POST like I implement below:
-#     # if request.method == "GET":
-#     #     result = {
-#     #         'me': database.get_app_setting("owner_profile"),
-#     #         'client_id':
-#     #     }
-#     #     resp = profile(request)
-#     #     bd = request.scope["bearer_data"]
-#     #     resp["client_id"] = bd["client_id"]
-#     #     resp["scope"] = " ".join(bd["scopes"])
-#     #     return JSONResponse(resp)
+    <https://indieweb.org/token-endpoint#Verifying_an_Access_Token>
+    """
+    bd = request.scope["bearer_data"]
+    result = {
+        "me": current_app.config["APPCONFIG"].owner_profile,
+        "client_id": bd["client_id"],
+        "scope": " ".join(bd["scopes"]),
+    }
+    return jsonify(result)
 
-#     if request.method == "POST":
-#         db = database.get_db()
 
-#         if request.form.get("action") == "revoke":
-#             token = request.form["token"]
-#             tokRow = db.execute(
-#                 "SELECT host from BearerToken WHERE token = ?", (token,)
-#             ).fetchone()
-#             if tokRow["host"] == request.headers["host"]:
-#                 db.execute(
-#                     "UPDATE BearerToken SET revoked 1 WHERE token = ?;", (token,)
-#                 )
-#             return
-#         code_row = redeem_auth_code(
-#             request.form["code"],
-#             request.form["client_id"],
-#             request.form["redirect_uri"],
-#             request.headers["host"],
-#             request.form.get("code_verifier"),
-#         )
-#         bearer_token = secrets.token_urlsafe(16)
+def bearer_POST():
+    """Handle a POST request for the bearer endpoint.
 
-#         db.execute(
-#             database.INSERT_BEARER_TOKEN_SQL,
-#             (
-#                 bearer_token,
-#                 datetime.datetime.utcnow(),
-#                 code_row["authenticationToken"],
-#                 code_row["clientId"],
-#                 code_row["scopes"],
-#                 request.headers["host"],
-#             ),
-#         )
-#         db.commit()
+    After the user authorizes the client via the authorization endpoint,
+    the client exchanges the authorization code it got
+    for an access token by making a POST request to the bearer endpoint,
+    which is managed in this function.
 
-#         response = {
-#             "me": database.get_app_setting("owner_profile"),
-#             "token_type": "bearer",
-#             "access_token": bearer_token,
-#             "scope": " ".join(code_row["scopes"]),
-#         }
-#         return jsonify(response)
+    <https://indieweb.org/token-endpoint#Granting_an_Access_Token>
+    """
+    db = database.get_db()
+
+    action = request.form.get("action")
+
+    if action == "revoke":
+        token = request.form["token"]
+        tokRow = db.execute(
+            "SELECT host from BearerToken WHERE token = ?", (token,)
+        ).fetchone()
+        if tokRow["host"] == request.headers["host"]:
+            db.execute("UPDATE BearerToken SET revoked 1 WHERE token = ?;", (token,))
+        return
+
+    elif action and action != "create":
+        return render_error(400, f"Invalid action {action}")
+
+    # If an action is not specified, assume "create"
+
+    code_row = redeem_auth_code(
+        request.form["code"],
+        request.form["client_id"],
+        request.form["redirect_uri"],
+        request.headers["host"],
+        request.form.get("code_verifier"),
+    )
+
+    bearer_token = secrets.token_urlsafe(16)
+
+    db.execute(
+        database.INSERT_BEARER_TOKEN_SQL,
+        (
+            bearer_token,
+            datetime.datetime.utcnow(),
+            code_row["authorizationCode"],
+            code_row["clientId"],
+            code_row["scopes"],
+            request.headers["host"],
+        ),
+    )
+    db.commit()
+
+    response = {
+        "me": current_app.config["APPCONFIG"].owner_profile,
+        "token_type": "bearer",
+        "access_token": bearer_token,
+        "scope": code_row["scopes"],
+    }
+    return jsonify(response)
+
+
+@bp.route("/bearer", methods=("GET", "POST"))
+@indieauth_required(ALL_HTTP_METHODS)
+def bearer():
+    """The IndieAuth bearer token endpoint
+
+    GET:    Verify an existing access token
+    POST:   Exchange an authorization code from the authorization endpoint
+            for an access token and mark the authorization code as used
+    """
+    if request.method == "GET":
+        return bearer_GET()
+    if request.method == "POST":
+        return bearer_POST()

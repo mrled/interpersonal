@@ -1,10 +1,12 @@
 import logging
 import os
 
+import yaml
 from flask import Flask
 
 from interpersonal import database
-from interpersonal.blueprints import indieauth, root
+from interpersonal.appconfig import AppConfig
+from interpersonal.blueprints import indieauth, micropub, root
 
 
 def add_security_headers(resp):
@@ -36,26 +38,28 @@ def add_security_headers(resp):
 
 def create_app(
     test_config=None,
-    dbpath=os.environ.get("INTERPERSONAL_DATABASE"),
-    cookey=os.environ.get("INTERPERSONAL_COOKIE_SECRET_KEY"),
-    loglevel=os.environ.get("INTERPERSONAL_LOG_LEVEL", "INFO"),
+    configpath=os.environ.get("INTERPERSONAL_CONFIG"),
 ):
 
-    if not dbpath:
-        raise Exception("Missing dbpath")
-    if not cookey:
-        raise Exception("Missing cookie secret key")
+    try:
+        appconfig = AppConfig.fromyaml(configpath)
+    except:
+        raise Exception(
+            "INTERPERSONAL_CONFIG environment variable must point to a valid configuration file"
+        )
 
     app = Flask(__name__, instance_relative_config=True)
 
-    app.logger.setLevel(logging.getLevelName(loglevel))
+    app.logger.setLevel(logging.getLevelName(appconfig.loglevel))
 
     # Note that the keys here must be in all caps
     app.config.from_mapping(
         # The path to the sqlite database
-        DBPATH=dbpath,
+        DBPATH=appconfig.database,
+        # A valid AppConfig object
+        APPCONFIG=appconfig,
         # A secret, random value used to encrypt the session cookie
-        SECRET_KEY=cookey,
+        SECRET_KEY=appconfig.cookie_secret_key,
         # Require HTTPS before setting the session cookie
         SESSION_COOKIE_SECURE=True,
         # Prevents sending cookies with CSRF-prone requests (eg forms) from external sites
@@ -73,6 +77,7 @@ def create_app(
 
     app.register_blueprint(root.bp)
     app.register_blueprint(indieauth.bp)
+    app.register_blueprint(micropub.bp)
 
     # Actually apply the add_security_headers() function to all responses
     @app.after_request

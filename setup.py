@@ -21,6 +21,7 @@ setuptools.setup(
         "cryptography",
         "flask",
         "pytest",
+        "pyyaml",
         "rfc3986",
     ],
 )

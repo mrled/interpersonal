@@ -10,6 +10,19 @@ TEST_SQL_DATA = """
 """
 
 
+TEST_APPCONFIG_YAML_TEMPLATE = """
+---
+loglevel: DEBUG
+database: {db_path}
+password: {password}
+owner_profile: {owner_profile}
+cookie_secret_key: {cookie_secret_key}
+blogs:
+  - name: example
+    type: built-in example
+"""
+
+
 class TestConsts:
     login_password = "test-login-password-123X"
     cookie_secret_key = "test-cookie-secret-key-ASDF-1234"
@@ -25,25 +38,33 @@ def testconstsfix():
 @pytest.fixture
 def app():
     db_fd, db_path = tempfile.mkstemp()
+    conf_fd, conf_path = tempfile.mkstemp()
+
+    appconfig_str = TEST_APPCONFIG_YAML_TEMPLATE.format(
+        db_path=db_path,
+        password=TestConsts.login_password,
+        owner_profile=TestConsts.owner_profile,
+        cookie_secret_key=TestConsts.cookie_secret_key,
+    )
+    os.write(conf_fd, appconfig_str.encode())
 
     app = create_app(
-        {
+        test_config={
             "TESTING": True,
-            "DBPATH": db_path,
-            "SECRET_KEY": TestConsts.cookie_secret_key,
-        }
+        },
+        configpath=conf_path,
     )
 
     with app.app_context():
         database.init_db()
-        database.set_app_setting("login_password", TestConsts.login_password)
-        database.set_app_setting("owner_profile", TestConsts.owner_profile)
         database.get_db().executescript(TestConsts.sql_data)
 
     yield app
 
     os.close(db_fd)
     os.unlink(db_path)
+    os.close(conf_fd)
+    os.unlink(conf_path)
 
 
 @pytest.fixture
