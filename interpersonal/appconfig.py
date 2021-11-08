@@ -5,11 +5,7 @@ import typing
 
 import yaml
 
-
-@dataclasses.dataclass
-class BlogGithubRepo:
-    github_repo: str
-    github_token: str
+from interpersonal.sitetypes import github
 
 
 class BlogExample:
@@ -19,8 +15,8 @@ class BlogExample:
 @dataclasses.dataclass
 class Blog:
     name: str
-    uri: str
-    type: typing.Union[BlogExample, BlogGithubRepo]
+    baseuri: str
+    type: typing.Union[BlogExample, github.HugoGithubRepo]
 
 
 @dataclasses.dataclass
@@ -49,7 +45,7 @@ class AppConfig:
                 blogtype = BlogExample()
                 uri = "http://example.com/blog"
             elif yamlblog["type"] == "github":
-                blogtype = BlogGithubRepo(
+                blogtype = github.HugoGithubRepo(
                     yamlblog["github_repo"], yamlblog["github_token"]
                 )
                 uri = yamlblog["uri"]

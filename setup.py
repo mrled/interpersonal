@@ -20,6 +20,7 @@ setuptools.setup(
         "coverage",
         "cryptography",
         "flask",
+        "ghapi",
         "pytest",
         "pyyaml",
         "requests",

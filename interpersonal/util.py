@@ -3,8 +3,10 @@
 from urllib.parse import parse_qs, urlencode, urlparse
 import functools
 import typing
+from fastcore.basics import strcat
 
-from flask import request
+from flask import current_app, jsonify, render_template
+from flask.helpers import url_for
 
 
 def querystr(d: typing.Dict, prefix=False) -> str:
@@ -100,3 +102,107 @@ def uri_copy_and_append_query(u: str, d: typing.Dict = None) -> str:
             qs[k] = v
 
     return uri(f"{parsed_u.scheme}://{parsed_u.netloc}{parsed_u.path}", d=qs)
+
+
+class CaseInsensitiveDict(dict):
+    """A dict where keys are case insensitive
+
+    Adapted from <https://stackoverflow.com/a/32888599/868206>
+    """
+
+    @classmethod
+    def _k(cls, key):
+        return key.lower() if isinstance(key, str) else key
+
+    def __init__(self, *args, **kwargs):
+        super(CaseInsensitiveDict, self).__init__(*args, **kwargs)
+        self._convert_keys()
+
+    def __getitem__(self, key):
+        return super(CaseInsensitiveDict, self).__getitem__(self.__class__._k(key))
+
+    def __setitem__(self, key, value):
+        super(CaseInsensitiveDict, self).__setitem__(self.__class__._k(key), value)
+
+    def __delitem__(self, key):
+        return super(CaseInsensitiveDict, self).__delitem__(self.__class__._k(key))
+
+    def __contains__(self, key):
+        return super(CaseInsensitiveDict, self).__contains__(self.__class__._k(key))
+
+    def has_key(self, key):
+        return super(CaseInsensitiveDict, self).has_key(self.__class__._k(key))
+
+    def pop(self, key, *args, **kwargs):
+        return super(CaseInsensitiveDict, self).pop(
+            self.__class__._k(key), *args, **kwargs
+        )
+
+    def get(self, key, *args, **kwargs):
+        return super(CaseInsensitiveDict, self).get(
+            self.__class__._k(key), *args, **kwargs
+        )
+
+    def setdefault(self, key, *args, **kwargs):
+        return super(CaseInsensitiveDict, self).setdefault(
+            self.__class__._k(key), *args, **kwargs
+        )
+
+    def update(self, E=None, **F):
+        super(CaseInsensitiveDict, self).update(self.__class__(E or {}))
+        super(CaseInsensitiveDict, self).update(self.__class__(**F))
+
+    def _convert_keys(self):
+        for k in list(self.keys()):
+            v = super(CaseInsensitiveDict, self).pop(k)
+            self.__setitem__(k, v)
+
+
+# def absolute_url_for(current_app, view, **kwargs):
+#     """Generate an absolute URL for a view.
+
+#     Takes a view function name, like `flask.url_for`, and returns that view
+#     function's URL prefixed with the full & correct scheme and domain.
+
+#     via: <https://github.com/pallets/flask/issues/824#issuecomment-302904753>
+
+#     Unfortunately Flask doesn't offer this functionality.
+#     Needed at least for verifying the bearer token, where the micropub server
+#     must make a request to the indieauth server.
+#     """
+#     parsed_url = urlparse(url_for(view, _external=True, **kwargs))
+#     app_scheme = urlparse(current_app.config["HOST"]).scheme
+#     final_parsed_url = parsed_url._replace(scheme=app_scheme)
+#     return final_parsed_url.geturl()
+
+
+def json_error(errcode: int, errmsg: str, errdesc: str = ""):
+    """Return JSON error"""
+    current_app.logger.error(
+        f"Error {errcode}: {errmsg}. Description: {errdesc or 'none'}"
+    )
+    return (
+        jsonify({"error": errmsg, "error_description": errdesc or ""}),
+        errcode,
+    )
+
+
+def render_error(errcode: int, errmsg: str):
+    """Render an HTTP error page and log it"""
+    current_app.logger.error(errmsg)
+    return (
+        render_template("error.html.j2", error_code=errcode, error_desc=errmsg),
+        errcode,
+    )
+
+
+def parse_opt_scope_list(scopes: typing.Optional[str]) -> typing.List[str]:
+    """Parse scope input
+
+    Scopes might not be specified, or might be a space separated list.
+
+    If a scope is not specified, it means 'create'.
+    """
+    if scopes:
+        return scopes.split(" ")
+    return ["create"]

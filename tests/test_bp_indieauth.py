@@ -66,7 +66,7 @@ def test_authorize_POST(client, indieauthfix, testconstsfix):
     authorize_uri = "/indieauth/authorize"
 
     indieauthfix.login()
-    response_grant = indieauthfix.grant(client_id, redir_uri)
+    response_grant = indieauthfix.grant(client_id, redir_uri, "testing state")
     # response_grant.data will be something like:
     # b'<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">\n<title>Redirecting...</title>\n<h1>Redirecting...</h1>\n<p>You should be redirected automatically to target URL: <a href="https://client.example.net/redir/to/here?code=kLHf5RxkuJTpGKd8ealmXA&amp;state=unrandom+state+for+just+this+test">https://client.example.net/redir/to/here?code=kLHf5RxkuJTpGKd8ealmXA&amp;state=unrandom+state+for+just+this+test</a>. If not click the link.'
     # We just need to extract the code from that
@@ -202,23 +202,9 @@ def test_redeem_auth_code(app, client, indieauthfix, testconstsfix):
     state = secrets.token_urlsafe(16)
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
-    grant_uri = "/indieauth/grant"
 
     indieauthfix.login()
-
-    response = client.post(
-        grant_uri,
-        data={
-            "response_type": "code",
-            "client_id": client_id,
-            "redirect_uri": redir_uri,
-            "state": state,
-            "code_challenge": None,
-            "code_challenge_method": None,
-            "me": testconstsfix.owner_profile,
-            "scope": "profile",
-        },
-    )
+    response = indieauthfix.grant(client_id, redir_uri, state)
 
     authorization_code = (
         response.data.decode().split(f"{redir_uri}?code=")[1].split("&amp;")[0]
@@ -292,49 +278,24 @@ def test_bearer_POST_requires_auth(client, indieauthfix, testconstsfix):
         raise exc
 
 
-def test_bearer(app, client, indieauthfix, testconstsfix):
+def test_bearer_POST(client, indieauthfix, testconstsfix):
 
     ## Initial setup
     state = secrets.token_urlsafe(16)
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
-    grant_uri = "/indieauth/grant"
 
-    ## Log in
+    ## Log in, grant, get auth code
     indieauthfix.login()
-
-    ## Authorize our client app
-    response = client.post(
-        grant_uri,
-        data={
-            "response_type": "code",
-            "client_id": client_id,
-            "redirect_uri": redir_uri,
-            "state": state,
-            "code_challenge": None,
-            "code_challenge_method": None,
-            "me": testconstsfix.owner_profile,
-            "scope:create": "on",
-        },
-    )
-
-    ## Get the authorization code
-    authorization_code = (
-        response.data.decode().split(f"{redir_uri}?code=")[1].split("&amp;")[0]
+    grant_response = indieauthfix.grant(client_id, redir_uri, state)
+    authorization_code = indieauthfix.authorization_code_from_grant_response(
+        grant_response, redir_uri
     )
 
     ## POST that auth code to the bearer endpoint, exchanging it for an access token
-    response = client.post(
-        "/indieauth/bearer",
-        # the data= argument passes application/x-www-form-urlencoded
-        # which is what /indieauth/bearer should accept
-        data={
-            "code": authorization_code,
-            "me": testconstsfix.owner_profile,
-            "client_id": client_id,
-            "redirect_uri": redir_uri,
-        },
-    )
+    response = indieauthfix.bearer(authorization_code, client_id, redir_uri)
+
+    # TODO: verify the database is in the state we expect too
 
     response_json = json.loads(response.data)
 

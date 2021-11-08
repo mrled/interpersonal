@@ -23,29 +23,14 @@ from interpersonal import database, util
 from interpersonal.blueprints.indieauth import (
     ALL_HTTP_METHODS,
     COOKIE_INDIE_AUTHED,
+    bearer_verify_token,
     indieauth_required,
 )
+from interpersonal.sitetypes.base import HugoBase
+from interpersonal.util import render_error, json_error
 
 
 bp = Blueprint("micropub", __name__, url_prefix="/micropub")
-
-
-def json_error(errcode: int, errmsg: str):
-    """Return JSON error"""
-    current_app.logger.error(errmsg)
-    return (
-        jsonify({"error": errmsg}),
-        errcode,
-    )
-
-
-def render_error(errcode: int, errmsg: str):
-    """Render an HTTP error page and log it"""
-    current_app.logger.error(errmsg)
-    return (
-        render_template("error.html.j2", error_code=errcode, error_desc=errmsg),
-        errcode,
-    )
 
 
 # TODO: code duplication from indieauth blueprint, can I fix?
@@ -59,7 +44,7 @@ def load_logged_in_user():
 
 
 # TODO: add tests
-def verify_indieauth_access_token(token):
+def verify_indieauth_access_token_via_http(token):
     """Verify an IndieAuth access token (bearer token)
 
     <https://indieweb.org/token-endpoint#Verifying_an_Access_Token>
@@ -79,13 +64,35 @@ def verify_indieauth_access_token(token):
     However, for now I'm going to do it as if these were two separate implementations. I'll learn it better this way, and it'll be more useful as an example to other implementors.
     """
 
-    token_endpoint = url_for("indieauth.token")
+    token_endpoint = util.absolute_url_for(current_app, "indieauth.bearer")
+    # token_endpoint = url_for("indieauth.bearer")
+    current_app.logger.debug(f"Verifying access token via endpoint {token_endpoint}")
     response = requests.get(
         token_endpoint, headers={"Authorization": f"Bearer {token}"}
     )
     response.raise_for_status()
     verified_token = json.loads(response.content.decode())
     return verified_token
+
+
+# TODO: add tests
+def verify_indieauth_access_token_internally(token: str):
+    """Verify an IndieAuth access token (bearer token)
+
+    <https://indieweb.org/token-endpoint#Verifying_an_Access_Token>
+
+    > Token-endpoints like https://tokens.indieauth.com that aim to interoperate with different micropub endpoint implementations MUST support this standard mechanism for verifying the token. However, if the token and micropub endpoints are tightly coupled (i.e. you control both implementations and expect them only to talk to each other), this verification can be done internally.
+
+    I ran into problems with url_for in test mode, so I'm going to try to do this internally -- without making an HTTP request to /indieauth/bearer, but running that code instead.
+
+    Sad!
+    """
+    return bearer_verify_token(
+        token,
+        request.form.get("me"),
+        request.form.get("client_id"),
+        util.parse_opt_scope_list(request.form.get("scope")),
+    )
 
 
 @bp.route("/")
@@ -101,31 +108,60 @@ def index():
 
 
 # TODO: add tests
-def micropub_blog_endpoint_GET():
-    """The GET verb for the micropub index route"""
-    token = re.sub("Bearer ", "", request.headers["Authorization"])
+def micropub_blog_endpoint_GET(blog: HugoBase):
+    """The GET verb for the micropub index route
+
+    Used by clients to:
+    * Retrieve the configuration, including the media-endpoint and any syndication targets
+      (syndication targets currently not supported)
+    * Retrieve metadata for a given URL, such as published date and tags, in microformats2-json format
+    """
+    try:
+        token = re.sub("Bearer ", "", request.headers["Authorization"])
+    except KeyError:
+        return json_error(401, "unauthorized", "Missing Authorization header")
 
     if not token:
-        return json_error(401, "unauthorized")
+        return json_error(401, "unauthorized", "No token was provided")
 
     try:
-        verified_token = verify_indieauth_access_token(token)
-    except:
-        return json_error(401, "unauthorized")
+        verify_indieauth_access_token_internally(token)
+        current_app.logger.debug(f"Successfully verified token {token}")
+    except BaseException as exc:
+        return json_error(401, "unauthorized", f"Invalid token, exception: {exc}")
 
     # TODO: not sure how I know that the user is valid?
 
     q = request.args.get("q")
+
+    # The micropub endpoint configuration
     if q == "config":
         return jsonify(
             {
                 "media-endpoint": url_for(".media"),
             }
         )
+
+    # Properties for a given "source", aka metadata for a given URL
+    # e.g. tags, title, publish date, ... for a blog post
+    # TODO: we ignore requests for specific properties and always return all properties, should we change this?
     elif q == "source":
         url = request.args.get("url")
         if not url:
-            return json_error(400, "invalid_request")
+            return json_error(
+                400, "invalid_request", "Required 'url' parameter missing"
+            )
+        return blog.get_post(url).frontmatter
+
+    elif q == "syndicate-to":
+        return json_error(400, "invalid_request", "syndication is not implemented")
+
+    else:
+        return json_error(
+            400,
+            "invalid_request",
+            "Valid authorization, but invalid or missing 'q' parameter",
+        )
 
 
 # TODO: add tests
@@ -140,6 +176,7 @@ def micropub_blog_endpoint(blog_name):
         blog = current_app.config["APPCONFIG"].blog(blog_name)
     except KeyError:
         return render_error(404, f"No such blog configured: {blog_name}")
+
     if request.method == "GET":
         return micropub_blog_endpoint_GET(blog)
     if request.method == "POST":

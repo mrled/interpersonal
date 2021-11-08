@@ -87,14 +87,40 @@ class IndieAuthActions(object):
     def logout(self):
         return self._client.get("/indieauth/logout")
 
-    def grant(self, client_id, redirect_uri):
+    def grant(self, client_id, redirect_uri, state):
         return self._client.post(
             "/indieauth/grant",
             data={
+                "response_type": "code",
                 "client_id": client_id,
                 "redirect_uri": redirect_uri,
-                "state": "unrandom state for just this test",
+                "state": state,
+                "code_challenge": None,
+                "code_challenge_method": None,
+                "me": TestConsts.owner_profile,
+                "scope:create": "on",
             },
+        )
+
+    def bearer(self, authorization_code, client_id, redirect_url):
+        return self._client.post(
+            "/indieauth/bearer",
+            # the data= argument passes application/x-www-form-urlencoded
+            # which is what /indieauth/bearer should accept
+            data={
+                "code": authorization_code,
+                "me": TestConsts.owner_profile,
+                "client_id": client_id,
+                "redirect_uri": redirect_url,
+            },
+        )
+
+    def authorization_code_from_grant_response(self, grant_response, redirect_uri):
+        """Parse the authorization code out from the the response to /indieauth/grant"""
+        return (
+            grant_response.data.decode()
+            .split(f"{redirect_uri}?code=")[1]
+            .split("&amp;")[0]
         )
 
 

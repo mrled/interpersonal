@@ -5,6 +5,7 @@ import functools
 import hashlib
 import secrets
 import sqlite3
+import typing
 
 import rfc3986
 from cryptography.hazmat.primitives import constant_time
@@ -19,10 +20,10 @@ from flask import (
     request,
     session,
     url_for,
-    wrappers,
 )
 
 from interpersonal import database, util
+from interpersonal.util import render_error, json_error
 
 bp = Blueprint("indieauth", __name__, url_prefix="/indieauth")
 
@@ -50,15 +51,6 @@ ALL_HTTP_METHODS = [
     "TRACE",
     "PATCH",
 ]
-
-
-def render_error(errcode: int, errmsg: str):
-    """Render an HTTP error page and log it"""
-    current_app.logger.error(errmsg)
-    return (
-        render_template("error.html.j2", error_code=errcode, error_desc=errmsg),
-        errcode,
-    )
 
 
 @bp.route("/")
@@ -409,7 +401,31 @@ def redeem_auth_code(
     return finalrow
 
 
-# TODO: This is unfinished and untested
+# TODO: add tests
+# TODO: add tests for invalid dataa
+def bearer_verify_token(
+    token: str, owner_profile: str, client_id: str, scopes: typing.List[str]
+):
+    """Verify a bearer token"""
+    db = database.get_db()
+    row = db.execute(
+        """
+            SELECT
+                bearerToken,
+                BearerToken.clientId,
+                BearerToken.scopes
+            FROM
+                BearerToken
+            INNER JOIN AuthorizationCode ON BearerToken.authTokenUsed = AuthorizationCode.authorizationCode
+            WHERE
+                bearerToken = ?;
+        """,
+        (token,),
+    ).fetchone()
+    if not row:
+        return json_error(400, f"Invalid bearer token '{token}'")
+
+    return {"me": owner_profile, "client_id": client_id, "scope": " ".join(scopes)}
 
 
 def bearer_GET():
@@ -420,12 +436,11 @@ def bearer_GET():
     <https://indieweb.org/token-endpoint#Verifying_an_Access_Token>
     """
     bd = request.scope["bearer_data"]
-    result = {
-        "me": current_app.config["APPCONFIG"].owner_profile,
-        "client_id": bd["client_id"],
-        "scope": " ".join(bd["scopes"]),
-    }
-    return jsonify(result)
+    return jsonify(
+        bearer_verify_token(
+            current_app.config["APPCONFIG"].owner_profile, bd["client_id"], bd["scopes"]
+        )
+    )
 
 
 def bearer_POST():
@@ -488,7 +503,7 @@ def bearer_POST():
     return jsonify(response)
 
 
-@bp.route("/bearer", methods=("GET", "POST"))
+@bp.route("/bearer", methods=["GET", "POST"])
 @indieauth_required(ALL_HTTP_METHODS)
 def bearer():
     """The IndieAuth bearer token endpoint
