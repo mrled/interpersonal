@@ -39,10 +39,11 @@ _example_repo_posts = {
 
 
 class HugoExampleRepo(base.HugoBase):
-    """A Hugo blog kept in a github.com repo
+    """An example blog that looks like a Hugo blog to Interpersonal.
 
-    Assumptions:
-    - The blog is hosted on the default branch
+    Useful for testing and maybe nothing else.
+
+    Includes a couple of example posts.
     """
 
     def __init__(self, name, uri):
@@ -50,5 +51,7 @@ class HugoExampleRepo(base.HugoBase):
         super().__init__(name, uri)
 
     def _get_raw_post_body(self, uri: str) -> base.HugoPostSource:
-        path = re.sub(re.escape(self.uri), "", uri)
+        path = re.sub(re.escape(self.baseuri), "", uri)
+        if not path.startswith("/"):
+            path = f"/{path}"
         return self.posts[path]

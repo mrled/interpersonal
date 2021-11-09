@@ -83,7 +83,6 @@ def index():
     Show a list of configured blogs
     """
     blogs = current_app.config["APPCONFIG"].blogs
-    # TODO: show example blog correctly (no github link)
     return render_template("micropub/index.html.j2", blogs=blogs)
 
 
@@ -115,6 +114,8 @@ def micropub_blog_endpoint_GET(blog: HugoBase):
 
     q = request.args.get("q")
 
+    current_app.logger.debug(f"Micropub endpoint with q={q}")
+
     # The micropub endpoint configuration
     if q == "config":
         return jsonify(
@@ -134,7 +135,14 @@ def micropub_blog_endpoint_GET(blog: HugoBase):
             return json_error(
                 400, "invalid_request", "Required 'url' parameter missing"
             )
-        return blog.get_post(url).frontmatter
+        try:
+            post = blog.get_post(url)
+            return jsonify(post.frontmatter)
+        # TODO: Raise a specific error in the blog object when a post is not found
+        except KeyError:
+            return json_error(404, "no such blog post")
+        except BaseException as exc:
+            return json_error(500, "internal server error", exc)
 
     elif q == "syndicate-to":
         return json_error(400, "invalid_request", "syndication is not implemented")

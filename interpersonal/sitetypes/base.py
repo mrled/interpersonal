@@ -29,6 +29,8 @@ def parse_post_content(post_content: str) -> ParsedPost:
     Pass in the post content as a string, including YAML frontmatter and post body.
     """
 
+    post_content = post_content.strip()
+
     yaml_start_str = "---\n"
     yaml_end_str = "\n---\n"
 
@@ -56,10 +58,6 @@ def normalize_baseuri(baseuri: str) -> str:
     if baseuri[-1] != "/":
         return baseuri + "/"
     return baseuri
-
-
-class UnimplementedError(BaseException):
-    pass
 
 
 class HugoPostSource:
@@ -129,8 +127,8 @@ class HugoBase:
 
     def _get_raw_post_body(self, uri) -> str:
         """Subclasses must implement"""
-        raise UnimplementedError
+        raise NotImplementedError("Please implement this in the subclass")
 
     def get_post(self, uri) -> ParsedPost:
-        raw_post = self.get_raw_post_body(uri)
+        raw_post = self._get_raw_post_body(uri)
         return parse_post_content(raw_post)

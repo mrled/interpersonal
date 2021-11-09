@@ -21,6 +21,7 @@ cookie_secret_key: {cookie_secret_key}
 blogs:
   - name: example
     type: built-in example
+    uri: {baseuri}
 """
 
 
@@ -29,6 +30,7 @@ class TestConsts:
     cookie_secret_key = "test-cookie-secret-key-ASDF-1234"
     owner_profile = "https://interpersonal.example.org/"
     sql_data = TEST_SQL_DATA
+    blog_uri = "http://interpersonal.example.org"
 
 
 @pytest.fixture
@@ -46,6 +48,7 @@ def app():
         password=TestConsts.login_password,
         owner_profile=TestConsts.owner_profile,
         cookie_secret_key=TestConsts.cookie_secret_key,
+        baseuri=TestConsts.blog_uri,
     )
     os.write(conf_fd, appconfig_str.encode())
 

@@ -26,6 +26,7 @@ def test_config():
         blogs:
         - name: example
           type: built-in example
+          uri: http://whatever.example.net
         """
     )
 

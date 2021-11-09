@@ -10,9 +10,10 @@
     <ul>
       {% for blog in blogs %}
         <li>
-          <p>{{ blog.name }}</p>
-          <p><a href="{{ blog.uri }}">URI</a></p>
-          <p><a href="https://github.com/{{ blog.github_repo }}">Repo</a></p>
+          <p>
+            {{ blog.name }} (type: {{ blog.type }}):
+            <a href="{{ blog.uri }}">{{ blog.uri }}</a>
+          </p>
         </li>
       {% endfor %}
   </div>

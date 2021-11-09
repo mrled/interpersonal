@@ -5,18 +5,8 @@ import typing
 
 import yaml
 
-from interpersonal.sitetypes import github
-
-
-class BlogExample:
-    pass
-
-
-@dataclasses.dataclass
-class Blog:
-    name: str
-    baseuri: str
-    type: typing.Union[BlogExample, github.HugoGithubRepo]
+from interpersonal.sitetypes import example, github
+from interpersonal.sitetypes.base import HugoBase
 
 
 @dataclasses.dataclass
@@ -28,7 +18,7 @@ class AppConfig:
     password: str
     owner_profile: str
     cookie_secret_key: str
-    blogs: typing.List[Blog]
+    blogs: typing.List[HugoBase]
 
     @classmethod
     def fromyaml(cls, path: str) -> "AppConfig":
@@ -39,19 +29,20 @@ class AppConfig:
         with open(path) as fp:
             yamlcontents = yaml.load(fp, yaml.Loader)
 
-        blogs: typing.List[Blog] = []
+        blogs: typing.List[HugoBase] = []
         for yamlblog in yamlcontents["blogs"]:
             if yamlblog["type"] == "built-in example":
-                blogtype = BlogExample()
-                uri = "http://example.com/blog"
+                blog = example.HugoExampleRepo(yamlblog["name"], yamlblog["uri"])
             elif yamlblog["type"] == "github":
-                blogtype = github.HugoGithubRepo(
-                    yamlblog["github_repo"], yamlblog["github_token"]
+                blog = github.HugoGithubRepo(
+                    yamlblog["name"],
+                    yamlblog["uri"],
+                    yamlblog["github_repo"],
+                    yamlblog["github_token"],
                 )
-                uri = yamlblog["uri"]
             else:
                 raise Exception(f"Unknown blog type {yamlblog['type']}")
-            blogs += [Blog(yamlblog["name"], uri, blogtype)]
+            blogs += [blog]
 
         loglevel = yamlcontents.get("loglevel", "INFO")
         db = yamlcontents["database"]
@@ -60,7 +51,7 @@ class AppConfig:
         owner_profile = yamlcontents["owner_profile"]
         return cls(loglevel, db, password, owner_profile, cookie_secret_key, blogs)
 
-    def blog(self, name: str) -> Blog:
+    def blog(self, name: str) -> HugoBase:
         """Get a blog by name"""
         for blog in self.blogs:
             if blog.name == name:
