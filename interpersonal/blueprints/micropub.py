@@ -110,6 +110,7 @@ def micropub_blog_endpoint_GET(blog: HugoBase):
             f"Successfully verified token {token} for owner {verified['me']} using client {verified['client_id']} authorized for scope {verified['scope']}"
         )
     except BaseException as exc:
+        current_app.logger.debug(f"Could not verify token {token}. Exception: {exc}")
         return json_error(401, "unauthorized", f"Invalid token, exception: {exc}")
 
     q = request.args.get("q")
@@ -118,7 +119,9 @@ def micropub_blog_endpoint_GET(blog: HugoBase):
     if q == "config":
         return jsonify(
             {
-                "media-endpoint": url_for(".media"),
+                "media-endpoint": url_for(
+                    "micropub.micropub_blog_media", blog_name=blog.name
+                ),
             }
         )
 
@@ -161,3 +164,10 @@ def micropub_blog_endpoint(blog_name):
         return micropub_blog_endpoint_GET(blog)
     if request.method == "POST":
         return micropub_blog_endpoint_POST(blog)
+
+
+@bp.route("/<blog_name>/media")
+@indieauth_required(ALL_HTTP_METHODS)
+def micropub_blog_media(blog_name):
+    """The per-blog media endpoint"""
+    raise NotImplementedError

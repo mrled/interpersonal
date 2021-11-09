@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 
@@ -102,6 +103,14 @@ class IndieAuthActions(object):
             },
         )
 
+    def authorization_code_from_grant_response(self, grant_response, redirect_uri):
+        """Parse the authorization code out from the the response to /indieauth/grant"""
+        return (
+            grant_response.data.decode()
+            .split(f"{redirect_uri}?code=")[1]
+            .split("&amp;")[0]
+        )
+
     def bearer(self, authorization_code, client_id, redirect_url):
         return self._client.post(
             "/indieauth/bearer",
@@ -115,13 +124,14 @@ class IndieAuthActions(object):
             },
         )
 
-    def authorization_code_from_grant_response(self, grant_response, redirect_uri):
-        """Parse the authorization code out from the the response to /indieauth/grant"""
-        return (
-            grant_response.data.decode()
-            .split(f"{redirect_uri}?code=")[1]
-            .split("&amp;")[0]
-        )
+    def zero_to_bearer(self, client_id: str, redirect_uri: str, state: str):
+        self.login()
+        granted = self.grant(client_id, redirect_uri, state)
+        authcode = self.authorization_code_from_grant_response(granted, redirect_uri)
+        bearer_resp = self.bearer(authcode, client_id, redirect_uri)
+        bearer_json = json.loads(bearer_resp.data)
+        btoken = bearer_json["access_token"]
+        return btoken
 
 
 @pytest.fixture

@@ -74,11 +74,53 @@ def test_micropub_blog_endpoint_GET_auth(
         )
 
 
-# def test_micropub_blog_endpoint_GET_config():
+def test_micropub_blog_endpoint_GET_config(
+    app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient
+):
+    client_id = "https://client.example.net/"
+    redir_uri = "https://client.example.net/redir/to/here"
+    state = "test state whatever"
+    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+
+    with app.app_context():
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {btoken}"
+        response = client.get("/micropub/example?q=config", headers=headers)
+
+        assert response.status_code == 200
+        response_json = json.loads(response.data)
+        assert "media-endpoint" in response_json
+        assert response_json["media-endpoint"] == "/micropub/example/media"
+
+
+def test_micropub_blog_endpoint_GET_source_valid_url(
+    app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient
+):
+    client_id = "https://client.example.net/"
+    redir_uri = "https://client.example.net/redir/to/here"
+    state = "test state whatever"
+    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+
+    with app.app_context():
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {btoken}"
+
+        response = client.get(
+            "/micropub/example/?q=source&url=https://interpersonal.example.org/blog/post-one",
+            headers=headers,
+        )
+        assert b"asdf" == response.data
+        assert response.status_code == 200
+        response_json = json.loads(response.data)
+        assert "media-endpoint" in response_json
+        assert response_json["media-endpoint"] == "/micropub/example/media"
+
+
+# def test_micropub_blog_endpoint_GET_source_invalid_url():
 #     raise NotImplementedError
 
 
-# def test_micropub_blog_endpoint_GET_source():
+# def test_micropub_blog_endpoint_GET_source_no_url():
 #     raise NotImplementedError
 
 

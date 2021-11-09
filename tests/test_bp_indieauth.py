@@ -27,6 +27,23 @@ def test_login(client, indieauthfix):
         )
 
 
+def test_logout(client, indieauthfix):
+    assert client.get("/indieauth/login").status_code == 200
+    login_response = indieauthfix.login()
+    assert login_response.headers["Location"] == "http://localhost/indieauth/"
+
+    with client:
+        client.get("/")
+        assert indieauth.COOKIE_INDIE_AUTHED in session
+        assert (
+            session[indieauth.COOKIE_INDIE_AUTHED]
+            == indieauth.COOKIE_INDIE_AUTHED_VALUE
+        )
+
+        logout_response = indieauthfix.logout()
+        assert indieauth.COOKIE_INDIE_AUTHED not in session
+
+
 def test_authorize_GET(
     client: FlaskClient, indieauthfix: IndieAuthActions, testconstsfix: TestConsts
 ):
