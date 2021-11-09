@@ -1,3 +1,4 @@
+import re
 from urllib.parse import unquote
 import base64
 import datetime
@@ -401,31 +402,41 @@ def redeem_auth_code(
     return finalrow
 
 
-# TODO: add tests
-# TODO: add tests for invalid dataa
-def bearer_verify_token(
-    token: str, owner_profile: str, client_id: str, scopes: typing.List[str]
-):
+class InvalidBearerTokenError(BaseException):
+    pass
+
+
+class VerifiedBearerToken(typing.TypedDict):
+    me: str
+    client_id: str
+    scope: str
+
+
+def bearer_verify_token(token: str) -> VerifiedBearerToken:
     """Verify a bearer token"""
     db = database.get_db()
     row = db.execute(
         """
             SELECT
                 bearerToken,
-                BearerToken.clientId,
-                BearerToken.scopes
+                clientId,
+                scopes
             FROM
                 BearerToken
-            INNER JOIN AuthorizationCode ON BearerToken.authTokenUsed = AuthorizationCode.authorizationCode
             WHERE
                 bearerToken = ?;
         """,
         (token,),
     ).fetchone()
     if not row:
-        return json_error(400, f"Invalid bearer token '{token}'")
+        raise InvalidBearerTokenError()
+    current_app.logger.debug(f"Found valid bearer token: {row}")
 
-    return {"me": owner_profile, "client_id": client_id, "scope": " ".join(scopes)}
+    return {
+        "me": current_app.config["APPCONFIG"].owner_profile,
+        "client_id": row["clientId"],
+        "scope": row["scopes"],
+    }
 
 
 def bearer_GET():
@@ -435,12 +446,12 @@ def bearer_GET():
 
     <https://indieweb.org/token-endpoint#Verifying_an_Access_Token>
     """
-    bd = request.scope["bearer_data"]
-    return jsonify(
-        bearer_verify_token(
-            current_app.config["APPCONFIG"].owner_profile, bd["client_id"], bd["scopes"]
-        )
-    )
+    authh = request.headers["Authorization"]
+    token = re.sub("^Bearer ", "", authh)
+    try:
+        return jsonify(bearer_verify_token(token))
+    except InvalidBearerTokenError:
+        return json_error(400, f"Invalid bearer token '{token}'")
 
 
 def bearer_POST():

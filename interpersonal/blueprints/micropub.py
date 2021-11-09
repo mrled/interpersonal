@@ -75,26 +75,6 @@ def verify_indieauth_access_token_via_http(token):
     return verified_token
 
 
-# TODO: add tests
-def verify_indieauth_access_token_internally(token: str):
-    """Verify an IndieAuth access token (bearer token)
-
-    <https://indieweb.org/token-endpoint#Verifying_an_Access_Token>
-
-    > Token-endpoints like https://tokens.indieauth.com that aim to interoperate with different micropub endpoint implementations MUST support this standard mechanism for verifying the token. However, if the token and micropub endpoints are tightly coupled (i.e. you control both implementations and expect them only to talk to each other), this verification can be done internally.
-
-    I ran into problems with url_for in test mode, so I'm going to try to do this internally -- without making an HTTP request to /indieauth/bearer, but running that code instead.
-
-    Sad!
-    """
-    return bearer_verify_token(
-        token,
-        request.form.get("me"),
-        request.form.get("client_id"),
-        util.parse_opt_scope_list(request.form.get("scope")),
-    )
-
-
 @bp.route("/")
 @indieauth_required(ALL_HTTP_METHODS)
 def index():
@@ -125,12 +105,12 @@ def micropub_blog_endpoint_GET(blog: HugoBase):
         return json_error(401, "unauthorized", "No token was provided")
 
     try:
-        verify_indieauth_access_token_internally(token)
-        current_app.logger.debug(f"Successfully verified token {token}")
+        verified = bearer_verify_token(token)
+        current_app.logger.debug(
+            f"Successfully verified token {token} for owner {verified['me']} using client {verified['client_id']} authorized for scope {verified['scope']}"
+        )
     except BaseException as exc:
         return json_error(401, "unauthorized", f"Invalid token, exception: {exc}")
-
-    # TODO: not sure how I know that the user is valid?
 
     q = request.args.get("q")
 

@@ -1,10 +1,15 @@
 """Tests for the micropub blueprint"""
 
 import json
+
+from flask.app import Flask
+from flask.testing import FlaskClient
 from werkzeug.datastructures import Headers
 
+from tests.conftest import IndieAuthActions
 
-def test_index_requires_auth(client):
+
+def test_index_requires_auth(client: FlaskClient):
     response = client.get("/micropub/")
 
     try:
@@ -17,7 +22,9 @@ def test_index_requires_auth(client):
         raise exc
 
 
-def test_index_with_auth_shows_blog_list(client, indieauthfix):
+def test_index_with_auth_shows_blog_list(
+    client: FlaskClient, indieauthfix: IndieAuthActions
+):
     indieauthfix.login()
 
     response = client.get("/micropub/")
@@ -32,7 +39,9 @@ def test_index_with_auth_shows_blog_list(client, indieauthfix):
         raise exc
 
 
-def test_micropub_blog_endpoint_GET_auth(app, indieauthfix, client):
+def test_micropub_blog_endpoint_GET_auth(
+    app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient
+):
 
     state = "test state whatever"
     client_id = "https://client.example.net/"

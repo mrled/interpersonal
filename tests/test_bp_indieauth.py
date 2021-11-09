@@ -3,11 +3,15 @@
 import json
 import secrets
 
+import pytest
 from flask import session
-from werkzeug.test import Client
+from flask.app import Flask
+from flask.testing import FlaskClient
+from werkzeug.datastructures import Headers
 
 from interpersonal import database, util
 from interpersonal.blueprints import indieauth
+from tests.conftest import IndieAuthActions, TestConsts
 
 
 def test_login(client, indieauthfix):
@@ -23,7 +27,9 @@ def test_login(client, indieauthfix):
         )
 
 
-def test_authorize_GET(client, indieauthfix, testconstsfix):
+def test_authorize_GET(
+    client: FlaskClient, indieauthfix: IndieAuthActions, testconstsfix: TestConsts
+):
     state = secrets.token_urlsafe(16)
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
@@ -60,7 +66,9 @@ def test_authorize_GET(client, indieauthfix, testconstsfix):
         raise exc
 
 
-def test_authorize_POST(client, indieauthfix, testconstsfix):
+def test_authorize_POST(
+    client: FlaskClient, indieauthfix: IndieAuthActions, testconstsfix: TestConsts
+):
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
     authorize_uri = "/indieauth/authorize"
@@ -109,7 +117,7 @@ def test_authorize_POST(client, indieauthfix, testconstsfix):
         raise exc
 
 
-def test_authorize_GET_requires_auth(client, indieauthfix, testconstsfix):
+def test_authorize_GET_requires_auth(client: FlaskClient, testconstsfix: TestConsts):
     state = secrets.token_urlsafe(16)
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
@@ -147,7 +155,12 @@ def test_authorize_GET_requires_auth(client, indieauthfix, testconstsfix):
     # TODO: test that the authorization code doesn't show up in the database too
 
 
-def test_grant(app, client, indieauthfix, testconstsfix):
+def test_grant(
+    app: Flask,
+    client: FlaskClient,
+    indieauthfix: IndieAuthActions,
+    testconstsfix: TestConsts,
+):
     state = secrets.token_urlsafe(16)
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
@@ -198,16 +211,17 @@ def test_grant(app, client, indieauthfix, testconstsfix):
     assert row["used"] == 0
 
 
-def test_redeem_auth_code(app, client, indieauthfix, testconstsfix):
+def test_redeem_auth_code(
+    app: Flask, indieauthfix: IndieAuthActions, testconstsfix: TestConsts
+):
     state = secrets.token_urlsafe(16)
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
 
     indieauthfix.login()
-    response = indieauthfix.grant(client_id, redir_uri, state)
-
-    authorization_code = (
-        response.data.decode().split(f"{redir_uri}?code=")[1].split("&amp;")[0]
+    grant_response = indieauthfix.grant(client_id, redir_uri, state)
+    authorization_code = indieauthfix.authorization_code_from_grant_response(
+        grant_response, redir_uri
     )
 
     with app.app_context():
@@ -234,7 +248,7 @@ def test_redeem_auth_code(app, client, indieauthfix, testconstsfix):
         assert redeemed["used"] == 1
 
 
-def test_header(client: Client):
+def test_header(client: FlaskClient):
     """Spot checking that headers get applied to this blueprint
 
     Most checks are done in the root blueprint
@@ -250,7 +264,7 @@ def test_header(client: Client):
     )
 
 
-def test_bearer_GET_requires_auth(client, indieauthfix, testconstsfix):
+def test_bearer_GET_requires_auth(client: FlaskClient):
     response_GET = client.get("/indieauth/bearer")
 
     try:
@@ -263,7 +277,67 @@ def test_bearer_GET_requires_auth(client, indieauthfix, testconstsfix):
         raise exc
 
 
-def test_bearer_POST_requires_auth(client, indieauthfix, testconstsfix):
+def test_bearer_GET_valid_token(
+    client: FlaskClient, indieauthfix: IndieAuthActions, testconstsfix: TestConsts
+):
+    state = secrets.token_urlsafe(16)
+    client_id = "https://client.example.net/"
+    redir_uri = "https://client.example.net/redir/to/here"
+
+    indieauthfix.login()
+    grant_response = indieauthfix.grant(client_id, redir_uri, state)
+    authcode = indieauthfix.authorization_code_from_grant_response(
+        grant_response, redir_uri
+    )
+
+    bearer_POST_response = indieauthfix.bearer(authcode, client_id, redir_uri)
+    bearer_token = json.loads(bearer_POST_response.data)["access_token"]
+
+    authheaders = Headers()
+    authheaders["Authorization"] = f"Bearer {bearer_token}"
+    verify_result = client.get("/indieauth/bearer", headers=authheaders)
+    assert verify_result.status_code == 200
+    assert client_id.encode() in verify_result.data
+    assert testconstsfix.owner_profile.encode() in verify_result.data
+    assert b'"scope":"create"' in verify_result.data
+
+
+def test_bearer_verify_token(
+    app: Flask, indieauthfix: IndieAuthActions, testconstsfix: TestConsts
+):
+    state = secrets.token_urlsafe(16)
+    client_id = "https://client.example.net/"
+    redir_uri = "https://client.example.net/redir/to/here"
+
+    indieauthfix.login()
+    grant_response = indieauthfix.grant(client_id, redir_uri, state)
+    authcode = indieauthfix.authorization_code_from_grant_response(
+        grant_response, redir_uri
+    )
+    bearer_response = indieauthfix.bearer(authcode, client_id, redir_uri)
+    bearer_data = json.loads(bearer_response.data)
+
+    with app.app_context():
+        valid_verify_result = indieauth.bearer_verify_token(
+            bearer_data["access_token"],
+        )
+        assert valid_verify_result["client_id"] == client_id
+        assert valid_verify_result["me"] == testconstsfix.owner_profile
+        assert valid_verify_result["scope"] == "create"
+
+        with pytest.raises(indieauth.InvalidBearerTokenError):
+            invalid_verify_result = indieauth.bearer_verify_token(
+                "invalid-access-token-lol",
+            )
+            assert (
+                b"Invalid bearer token 'invalid-access-token-lol'"
+                in invalid_verify_result.data
+            )
+
+        # TODO: verify bad tokens fail
+
+
+def test_bearer_POST_requires_auth(client: FlaskClient):
     response_POST = client.post(
         "/indieauth/bearer", data={"example": "data", "for": "thistest"}
     )
@@ -278,7 +352,7 @@ def test_bearer_POST_requires_auth(client, indieauthfix, testconstsfix):
         raise exc
 
 
-def test_bearer_POST(client, indieauthfix, testconstsfix):
+def test_bearer_POST(indieauthfix: IndieAuthActions, testconstsfix: TestConsts):
 
     ## Initial setup
     state = secrets.token_urlsafe(16)
