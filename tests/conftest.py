@@ -134,6 +134,11 @@ class IndieAuthActions(object):
         bearer_resp = self.bearer(authcode, client_id, redirect_uri)
         bearer_json = json.loads(bearer_resp.data)
         btoken = bearer_json["access_token"]
+
+        # Don't confuse cookie authentication (self.login())
+        # with token authentication
+        self.logout()
+
         return btoken
 
 

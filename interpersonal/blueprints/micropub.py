@@ -19,10 +19,11 @@ from flask import (
     url_for,
 )
 
-from interpersonal import database, util
+from interpersonal import util
 from interpersonal.blueprints.indieauth import (
     ALL_HTTP_METHODS,
     COOKIE_INDIE_AUTHED,
+    InvalidBearerTokenError,
     bearer_verify_token,
     indieauth_required,
 )
@@ -86,31 +87,59 @@ def index():
     return render_template("micropub/index.html.j2", blogs=blogs)
 
 
-# TODO: add tests
+class MissingBearerAuthHeaderError(BaseException):
+    pass
+
+
+class MissingBearerTokenError(BaseException):
+    pass
+
+
+def bearer_verify_token_from_auth_header(auth_header: str):
+    """Given an Authorization header, verify the token.
+
+    Return a VerifiedBearerToken.
+
+    Raises exceptions if verification fails.
+    """
+    if not auth_header:
+        raise MissingBearerAuthHeaderError
+
+    token = re.sub("Bearer ", "", auth_header)
+    if not token:
+        raise MissingBearerTokenError
+
+    verified = bearer_verify_token(token)
+    current_app.logger.debug(
+        f"Successfully verified token {token} for owner {verified['me']} using client {verified['client_id']} authorized for scope {verified['scope']}"
+    )
+
+    return verified
+
+
 def micropub_blog_endpoint_GET(blog: HugoBase):
-    """The GET verb for the micropub index route
+    """The GET verb for the micropub blog route
 
     Used by clients to:
     * Retrieve the configuration, including the media-endpoint and any syndication targets
       (syndication targets currently not supported)
     * Retrieve metadata for a given URL, such as published date and tags, in microformats2-json format
     """
-    try:
-        token = re.sub("Bearer ", "", request.headers["Authorization"])
-    except KeyError:
-        return json_error(401, "unauthorized", "Missing Authorization header")
-
-    if not token:
-        return json_error(401, "unauthorized", "No token was provided")
 
     try:
-        verified = bearer_verify_token(token)
-        current_app.logger.debug(
-            f"Successfully verified token {token} for owner {verified['me']} using client {verified['client_id']} authorized for scope {verified['scope']}"
+        verified = bearer_verify_token_from_auth_header(
+            request.headers.get("Authorization")
         )
+    except MissingBearerAuthHeaderError:
+        return json_error(401, "unauthorized", "Missing Authorization header")
+    except MissingBearerTokenError:
+        return json_error(401, "unauthorized", "No token was provided")
+    except InvalidBearerTokenError as exc:
+        current_app.logger.debug(exc)
+        return json_error(401, "unauthorized", exc)
     except BaseException as exc:
-        current_app.logger.debug(f"Could not verify token {token}. Exception: {exc}")
-        return json_error(401, "unauthorized", f"Invalid token, exception: {exc}")
+        current_app.logger.debug(f"Unexpected exception: {exc}")
+        return json_error(500, "internal_server_error", exc)
 
     q = request.args.get("q")
 
@@ -155,9 +184,68 @@ def micropub_blog_endpoint_GET(blog: HugoBase):
         )
 
 
-# TODO: add tests
-@bp.route("/<blog_name>")
-@indieauth_required(["GET"])
+def micropub_blog_endpoint_POST(blog: HugoBase):
+    """The POST verb for the micropub blog route
+
+    Used by clients to change content (CRUD operations on posts)
+    """
+    try:
+        form_encoded = request.headers.get("Content-type") in [
+            "application/x-www-form-urlencoded",
+            "multipart/form-data",
+        ]
+        form_auth_token = request.form.get("auth_token")
+        if form_encoded and form_auth_token:
+            verified = bearer_verify_token(form_auth_token)
+        else:
+            verified = bearer_verify_token_from_auth_header(
+                request.headers.get("Authorization")
+            )
+    except MissingBearerAuthHeaderError:
+        return json_error(401, "unauthorized", "Missing Authorization header")
+    except MissingBearerTokenError:
+        return json_error(401, "unauthorized", "No token was provided")
+    except InvalidBearerTokenError as exc:
+        current_app.logger.debug(exc)
+        return json_error(401, "unauthorized", exc)
+    except BaseException as exc:
+        current_app.logger.debug(f"Unexpected exception: {exc}")
+        return json_error(500, "internal_server_error", exc)
+
+    try:
+        # Check for a header we use in testing, and return a success message
+        auth_test = request.headers["X-Interpersonal-Auth-Test"]
+        return jsonify({"interpersonal_test_result": "authentication_success"})
+    except KeyError:
+        pass
+
+    try:
+        content_type = request.headers["Content-type"]
+    except KeyError:
+        return json_error(400, "invalid_request", "No 'Content-type' header")
+
+    if content_type == "application/json":
+        pass
+    elif content_type == "x-www-form-urlencoded":
+        pass
+    elif content_type == "multipart/form-data":
+        pass
+    else:
+        return json_error(
+            400, "invalid_request", f"Invalid 'Content-type': '{content_type}'"
+        )
+
+    try:
+        # Check for a header we use in testing, and return a success message
+        contype_test = request.headers["X-Interpersonal-Content-Type-Test"]
+        return jsonify({"interpersonal_test_result": contype_test})
+    except KeyError:
+        pass
+
+    return json_error(400, "invalid_request", "Request could not be handled")
+
+
+@bp.route("/<blog_name>", methods=["GET", "POST"])
 def micropub_blog_endpoint(blog_name):
     """The micropub endpoint
 

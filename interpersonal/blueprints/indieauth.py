@@ -402,7 +402,7 @@ def redeem_auth_code(
     return finalrow
 
 
-class InvalidBearerTokenError(BaseException):
+class InvalidBearerTokenError(Exception):
     pass
 
 
@@ -429,7 +429,7 @@ def bearer_verify_token(token: str) -> VerifiedBearerToken:
         (token,),
     ).fetchone()
     if not row:
-        raise InvalidBearerTokenError()
+        raise InvalidBearerTokenError(f"Invalid bearer token: {token}")
     current_app.logger.debug(f"Found valid bearer token: {row}")
 
     return {

@@ -19,22 +19,17 @@ def test_micropub_blog_endpoint_GET_auth(
     redir_uri = "https://client.example.net/redir/to/here"
 
     with app.app_context():
-
-        indieauthfix.login()
-        grant_response = indieauthfix.grant(client_id, redir_uri, state)
-        authorization_code = indieauthfix.authorization_code_from_grant_response(
-            grant_response, redir_uri
-        )
-
-        bearer_response = indieauthfix.bearer(authorization_code, client_id, redir_uri)
+        btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
 
         unauth_response = client.get("/micropub/example")
         assert unauth_response.status_code == 401
+        unauth_data_json = json.loads(unauth_response.data)
+        assert unauth_data_json["error"] == "unauthorized"
+        assert unauth_data_json["error_description"] == "Missing Authorization header"
         assert b'"error":"unauthorized"' in unauth_response.data
 
-        bearer_token = json.loads(bearer_response.data)["access_token"]
         authheaders = Headers()
-        authheaders["Authorization"] = f"Bearer {bearer_token}"
+        authheaders["Authorization"] = f"Bearer {btoken}"
         auth_response = client.get("/micropub/example", headers=authheaders)
 
         assert auth_response.status_code == 400
