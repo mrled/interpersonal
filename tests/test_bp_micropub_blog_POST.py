@@ -1,5 +1,6 @@
 """Tests for /micropub/<blog> GET requests"""
 
+import io
 import json
 from urllib.parse import urlencode
 
@@ -104,13 +105,113 @@ def test_missing_content_type_fails(
         assert respjson["error_description"] == "No 'Content-type' header"
 
 
-def test_content_type_app_json():
-    pass
+def test_content_type_app_json(
+    app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient
+):
+    """Content-type of application/x-www-form-urlencoded should parse correctly"""
+    state = "test state whatever"
+    client_id = "https://client.example.net/"
+    redir_uri = "https://client.example.net/redir/to/here"
+    contype_test_value = "yes, please, nice ok"
+
+    with app.app_context():
+        bearer_token = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {bearer_token}"
+        # Passing a dict to data= will set Content-type to application/x-www-form-urlencoded
+        resp = client.post(
+            "/micropub/example",
+            json={
+                "auth_token": bearer_token,
+                "interpersonal_content-type_test": contype_test_value,
+            },
+            headers=headers,
+        )
+
+        try:
+            assert resp.status_code == 200
+            # Response like: {"interpersonal_test_result": contype_test, "content_type": content_type}
+            respjson = json.loads(resp.data)
+            assert respjson["interpersonal_test_result"] == contype_test_value
+            assert respjson["content_type"] == "application/json"
+        except BaseException:
+            print(f"Failing test. Response body: {resp.data}")
+            raise
 
 
-def test_content_type_urlencoded_form():
-    pass
+def test_content_type_urlencoded_form(
+    app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient
+):
+    """Content-type of application/x-www-form-urlencoded should parse correctly"""
+    state = "test state whatever"
+    client_id = "https://client.example.net/"
+    redir_uri = "https://client.example.net/redir/to/here"
+    contype_test_value = "yes, please, nice ok"
+
+    with app.app_context():
+        bearer_token = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {bearer_token}"
+        # Passing a dict to data= will set Content-type to application/x-www-form-urlencoded
+        resp = client.post(
+            "/micropub/example",
+            data={
+                "auth_token": bearer_token,
+                "interpersonal_content-type_test": contype_test_value,
+            },
+            headers=headers,
+        )
+
+        try:
+            assert resp.status_code == 200
+            # Response like: {"interpersonal_test_result": contype_test, "content_type": content_type}
+            respjson = json.loads(resp.data)
+            assert respjson["interpersonal_test_result"] == contype_test_value
+            assert respjson["content_type"] == "application/x-www-form-urlencoded"
+        except BaseException:
+            print(f"Failing test. Response body: {resp.data}")
+            raise
 
 
-def test_content_type_multipart_form():
-    pass
+def test_content_type_multipart_form(
+    app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient
+):
+    """Content-type of application/x-www-form-urlencoded should parse correctly"""
+    state = "test state whatever"
+    client_id = "https://client.example.net/"
+    redir_uri = "https://client.example.net/redir/to/here"
+    contype_test_value = "yes, please, nice ok"
+
+    test_file_data_1 = (io.BytesIO("test file contents 1".encode("utf8")), "test_1.txt")
+    test_file_data_2 = (
+        io.BytesIO("test file contents TWO".encode("utf8")),
+        "test_2.txt",
+    )
+
+    with app.app_context():
+        bearer_token = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {bearer_token}"
+        # Passing a dict to data= will set Content-type to application/x-www-form-urlencoded
+        # If the dict has a "file" key, it will be sent as multipart/form-data
+        resp = client.post(
+            "/micropub/example",
+            data={
+                "auth_token": bearer_token,
+                "interpersonal_content-type_test": contype_test_value,
+                "file": [test_file_data_1, test_file_data_2],
+            },
+            headers=headers,
+        )
+
+        try:
+            assert resp.status_code == 200
+            # Response like: {"interpersonal_test_result": contype_test, "content_type": content_type}
+            respjson = json.loads(resp.data)
+            assert respjson["interpersonal_test_result"] == contype_test_value
+            assert respjson["content_type"].startswith("multipart/form-data")
+            assert "test_1.txt" in respjson["filenames"]
+            assert "test_2.txt" in respjson["filenames"]
+        except BaseException:
+            print(f"Failing test. Response body: {resp.data}")
+            raise

@@ -409,7 +409,7 @@ class InvalidBearerTokenError(Exception):
 class VerifiedBearerToken(typing.TypedDict):
     me: str
     client_id: str
-    scope: str
+    scopes: typing.List[str]
 
 
 def bearer_verify_token(token: str) -> VerifiedBearerToken:
@@ -435,7 +435,7 @@ def bearer_verify_token(token: str) -> VerifiedBearerToken:
     return {
         "me": current_app.config["APPCONFIG"].owner_profile,
         "client_id": row["clientId"],
-        "scope": row["scopes"],
+        "scopes": row["scopes"].split(" "),
     }
 
 

@@ -111,7 +111,7 @@ def bearer_verify_token_from_auth_header(auth_header: str):
 
     verified = bearer_verify_token(token)
     current_app.logger.debug(
-        f"Successfully verified token {token} for owner {verified['me']} using client {verified['client_id']} authorized for scope {verified['scope']}"
+        f"Successfully verified token {token} for owner {verified['me']} using client {verified['client_id']} authorized for scope {verified['scopes']}"
     )
 
     return verified
@@ -212,37 +212,63 @@ def micropub_blog_endpoint_POST(blog: HugoBase):
         current_app.logger.debug(f"Unexpected exception: {exc}")
         return json_error(500, "internal_server_error", exc)
 
-    try:
-        # Check for a header we use in testing, and return a success message
-        auth_test = request.headers["X-Interpersonal-Auth-Test"]
+    auth_test = request.headers.get("X-Interpersonal-Auth-Test")
+    # Check for the header we use in testing, and return a success message
+    if auth_test:
         return jsonify({"interpersonal_test_result": "authentication_success"})
-    except KeyError:
-        pass
 
     try:
         content_type = request.headers["Content-type"]
     except KeyError:
         return json_error(400, "invalid_request", "No 'Content-type' header")
 
+    request_body = {}
+    request_files = {}
     if content_type == "application/json":
-        pass
-    elif content_type == "x-www-form-urlencoded":
-        pass
-    elif content_type == "multipart/form-data":
-        pass
+        request_body = json.loads(request.data)
+    elif content_type == "application/x-www-form-urlencoded":
+        request_body = request.form
+    elif content_type.startswith("multipart/form-data"):
+        request_body = request.form
+        request_files = {f.filename: f for f in request.files.getlist("file")}
     else:
         return json_error(
             400, "invalid_request", f"Invalid 'Content-type': '{content_type}'"
         )
 
-    try:
-        # Check for a header we use in testing, and return a success message
-        contype_test = request.headers["X-Interpersonal-Content-Type-Test"]
-        return jsonify({"interpersonal_test_result": contype_test})
-    except KeyError:
-        pass
+    request_file_names = [n for n in request_files.keys()]
 
-    return json_error(400, "invalid_request", "Request could not be handled")
+    contype_test = request_body.get("interpersonal_content-type_test")
+    # Check for the value we use in testing, and return a success message
+    if contype_test:
+        return jsonify(
+            {
+                "interpersonal_test_result": contype_test,
+                "content_type": content_type,
+                "filenames": request_file_names,
+            }
+        )
+
+    # Per spec, missing 'action' should imply create
+    action = request_body.get("action", "create")
+
+    # Ahh yes, the famous CUUD.
+    # These are all actions supported by the spec:
+    # supported_actions = ["delete", "undelete", "update", "create"]
+    supported_actions = ["create"]
+
+    if action not in supported_actions:
+        return json_error(400, "invalid_request", f"'{action}' action not supported")
+
+    if action not in verified["scopes"]:
+        return json_error(
+            403, "insufficient_scope", f"Access token not valid for action '{action}'"
+        )
+
+    if action == "create":
+        return json_error(400, "invalid_request", f"'delete' action not supported")
+    else:
+        return json_error(500, f"Unhandled action '{action}'")
 
 
 @bp.route("/<blog_name>", methods=["GET", "POST"])

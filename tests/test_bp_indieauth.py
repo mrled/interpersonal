@@ -316,7 +316,7 @@ def test_bearer_GET_valid_token(
     assert verify_result.status_code == 200
     assert client_id.encode() in verify_result.data
     assert testconstsfix.owner_profile.encode() in verify_result.data
-    assert b'"scope":"create"' in verify_result.data
+    assert b'"scopes":["create"]' in verify_result.data
 
 
 def test_bearer_verify_token(
@@ -340,7 +340,7 @@ def test_bearer_verify_token(
         )
         assert valid_verify_result["client_id"] == client_id
         assert valid_verify_result["me"] == testconstsfix.owner_profile
-        assert valid_verify_result["scope"] == "create"
+        assert "create" in valid_verify_result["scopes"]
 
         with pytest.raises(indieauth.InvalidBearerTokenError):
             invalid_verify_result = indieauth.bearer_verify_token(
