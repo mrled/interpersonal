@@ -82,6 +82,14 @@ def runner(app):
     return app.test_cli_runner()
 
 
+class ZeroToBearerTestData(typing.NamedTuple):
+    client_id: str
+    redirect_uri: str
+    state: str
+    scopes: typing.List[str]
+    btoken: str
+
+
 class IndieAuthActions(object):
     def __init__(self, client):
         self._client = client
@@ -148,6 +156,20 @@ class IndieAuthActions(object):
         self.logout()
 
         return btoken
+
+    def zero_to_bearer_with_test_data(
+        self,
+        client_id: str = "https://client.example.net/",
+        redirect_uri: str = "https://client.example.net/",
+        state: str = "test state whatever",
+        scopes: typing.List[str] = ["create"],
+    ):
+        """Start from scratch and get a bearer token.
+
+        Use some predefined test data and return it in a ZeroToBearerTestData object.
+        """
+        btoken = self.zero_to_bearer(client_id, redirect_uri, state, scopes)
+        return ZeroToBearerTestData(client_id, redirect_uri, state, scopes, btoken)
 
 
 @pytest.fixture
