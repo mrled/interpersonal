@@ -21,7 +21,9 @@ def test_micropub_blog_endpoint_POST_unauth_fails(
 
     with app.app_context():
         # Log in and get a bearer token, but don't use it
-        bearer_token = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+        bearer_token = indieauthfix.zero_to_bearer(
+            client_id, redir_uri, state, ["create"]
+        )
         unauth_response = client.post("/micropub/example")
         assert unauth_response.status_code == 401
         unauth_response_json = json.loads(unauth_response.data)
@@ -44,7 +46,9 @@ def test_auth_in_header(
     redir_uri = "https://client.example.net/redir/to/here"
 
     with app.app_context():
-        bearer_token = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+        bearer_token = indieauthfix.zero_to_bearer(
+            client_id, redir_uri, state, ["create"]
+        )
         authheaders = Headers()
         authheaders["Authorization"] = f"Bearer {bearer_token}"
         authheaders["X-Interpersonal-Auth-Test"] = "yes"
@@ -67,7 +71,9 @@ def test_auth_in_form(app: Flask, indieauthfix: IndieAuthActions, client: FlaskC
     redir_uri = "https://client.example.net/redir/to/here"
 
     with app.app_context():
-        bearer_token = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+        bearer_token = indieauthfix.zero_to_bearer(
+            client_id, redir_uri, state, ["create"]
+        )
         headers = Headers()
         headers["X-Interpersonal-Auth-Test"] = "yes"
 
@@ -94,7 +100,9 @@ def test_missing_content_type_fails(
     redir_uri = "https://client.example.net/redir/to/here"
 
     with app.app_context():
-        bearer_token = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+        bearer_token = indieauthfix.zero_to_bearer(
+            client_id, redir_uri, state, ["create"]
+        )
         authheaders = Headers()
         authheaders["Authorization"] = f"Bearer {bearer_token}"
         resp = client.post("/micropub/example", headers=authheaders)
@@ -115,7 +123,9 @@ def test_content_type_app_json(
     contype_test_value = "yes, please, nice ok"
 
     with app.app_context():
-        bearer_token = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+        bearer_token = indieauthfix.zero_to_bearer(
+            client_id, redir_uri, state, ["create"]
+        )
         headers = Headers()
         headers["Authorization"] = f"Bearer {bearer_token}"
         # Passing a dict to data= will set Content-type to application/x-www-form-urlencoded
@@ -149,7 +159,9 @@ def test_content_type_urlencoded_form(
     contype_test_value = "yes, please, nice ok"
 
     with app.app_context():
-        bearer_token = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+        bearer_token = indieauthfix.zero_to_bearer(
+            client_id, redir_uri, state, ["create"]
+        )
         headers = Headers()
         headers["Authorization"] = f"Bearer {bearer_token}"
         # Passing a dict to data= will set Content-type to application/x-www-form-urlencoded
@@ -189,7 +201,9 @@ def test_content_type_multipart_form(
     )
 
     with app.app_context():
-        bearer_token = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+        bearer_token = indieauthfix.zero_to_bearer(
+            client_id, redir_uri, state, ["create"]
+        )
         headers = Headers()
         headers["Authorization"] = f"Bearer {bearer_token}"
         # Passing a dict to data= will set Content-type to application/x-www-form-urlencoded

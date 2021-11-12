@@ -19,7 +19,7 @@ def test_micropub_blog_endpoint_GET_auth(
     redir_uri = "https://client.example.net/redir/to/here"
 
     with app.app_context():
-        btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+        btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state, ["create"])
 
         unauth_response = client.get("/micropub/example")
         assert unauth_response.status_code == 401
@@ -46,7 +46,7 @@ def test_micropub_blog_endpoint_GET_config(
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
     state = "test state whatever"
-    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state, ["create"])
 
     with app.app_context():
         headers = Headers()
@@ -68,7 +68,7 @@ def test_micropub_blog_endpoint_GET_source_valid_url(
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
     state = "test state whatever"
-    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state, ["create"])
 
     with app.app_context():
         headers = Headers()
@@ -104,7 +104,7 @@ def test_micropub_blog_endpoint_GET_source_invalid_url(
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
     state = "test state whatever"
-    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state, ["create"])
 
     with app.app_context():
         headers = Headers()
@@ -137,7 +137,7 @@ def test_micropub_blog_endpoint_GET_source_no_url(
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
     state = "test state whatever"
-    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state, ["create"])
 
     with app.app_context():
         headers = Headers()
@@ -167,7 +167,7 @@ def test_micropub_blog_endpoint_GET_syndicate_to(
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
     state = "test state whatever"
-    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state, ["create"])
 
     with app.app_context():
         headers = Headers()
@@ -197,7 +197,7 @@ def test_micropub_blog_endpoint_GET_invalid_q(
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
     state = "test state whatever"
-    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state)
+    btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state, ["create"])
 
     with app.app_context():
         headers = Headers()

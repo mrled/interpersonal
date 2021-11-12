@@ -91,7 +91,9 @@ def test_authorize_POST(
     authorize_uri = "/indieauth/authorize"
 
     indieauthfix.login()
-    response_grant = indieauthfix.grant(client_id, redir_uri, "testing state")
+    response_grant = indieauthfix.grant(
+        client_id, redir_uri, "testing state", ["create"]
+    )
     # response_grant.data will be something like:
     # b'<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">\n<title>Redirecting...</title>\n<h1>Redirecting...</h1>\n<p>You should be redirected automatically to target URL: <a href="https://client.example.net/redir/to/here?code=kLHf5RxkuJTpGKd8ealmXA&amp;state=unrandom+state+for+just+this+test">https://client.example.net/redir/to/here?code=kLHf5RxkuJTpGKd8ealmXA&amp;state=unrandom+state+for+just+this+test</a>. If not click the link.'
     # We just need to extract the code from that
@@ -236,7 +238,7 @@ def test_redeem_auth_code(
     redir_uri = "https://client.example.net/redir/to/here"
 
     indieauthfix.login()
-    grant_response = indieauthfix.grant(client_id, redir_uri, state)
+    grant_response = indieauthfix.grant(client_id, redir_uri, state, ["create"])
     authorization_code = indieauthfix.authorization_code_from_grant_response(
         grant_response, redir_uri
     )
@@ -302,7 +304,7 @@ def test_bearer_GET_valid_token(
     redir_uri = "https://client.example.net/redir/to/here"
 
     indieauthfix.login()
-    grant_response = indieauthfix.grant(client_id, redir_uri, state)
+    grant_response = indieauthfix.grant(client_id, redir_uri, state, ["create"])
     authcode = indieauthfix.authorization_code_from_grant_response(
         grant_response, redir_uri
     )
@@ -327,7 +329,7 @@ def test_bearer_verify_token(
     redir_uri = "https://client.example.net/redir/to/here"
 
     indieauthfix.login()
-    grant_response = indieauthfix.grant(client_id, redir_uri, state)
+    grant_response = indieauthfix.grant(client_id, redir_uri, state, ["create"])
     authcode = indieauthfix.authorization_code_from_grant_response(
         grant_response, redir_uri
     )
@@ -378,7 +380,7 @@ def test_bearer_POST(indieauthfix: IndieAuthActions, testconstsfix: TestConsts):
 
     ## Log in, grant, get auth code
     indieauthfix.login()
-    grant_response = indieauthfix.grant(client_id, redir_uri, state)
+    grant_response = indieauthfix.grant(client_id, redir_uri, state, ["create"])
     authorization_code = indieauthfix.authorization_code_from_grant_response(
         grant_response, redir_uri
     )

@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import typing
 
 import pytest
 from interpersonal import create_app
@@ -91,20 +92,21 @@ class IndieAuthActions(object):
     def logout(self):
         return self._client.get("/indieauth/logout")
 
-    def grant(self, client_id, redirect_uri, state):
-        return self._client.post(
-            "/indieauth/grant",
-            data={
-                "response_type": "code",
-                "client_id": client_id,
-                "redirect_uri": redirect_uri,
-                "state": state,
-                "code_challenge": None,
-                "code_challenge_method": None,
-                "me": TestConsts.owner_profile,
-                "scope:create": "on",
-            },
-        )
+    def grant(
+        self, client_id: str, redirect_uri: str, state: str, scopes: typing.List[str]
+    ):
+        data = {
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "code_challenge": None,
+            "code_challenge_method": None,
+            "me": TestConsts.owner_profile,
+        }
+        for scope in scopes:
+            data[f"scope:{scope}"] = "on"
+        return self._client.post("/indieauth/grant", data=data)
 
     def authorization_code_from_grant_response(self, grant_response, redirect_uri):
         """Parse the authorization code out from the the response to /indieauth/grant"""
@@ -127,9 +129,15 @@ class IndieAuthActions(object):
             },
         )
 
-    def zero_to_bearer(self, client_id: str, redirect_uri: str, state: str):
+    def zero_to_bearer(
+        self, client_id: str, redirect_uri: str, state: str, scopes: typing.List[str]
+    ):
+        """Start from scratch and get a bearer token.
+
+        Log in, grant access, parse the authorization code, exchange the authorization code for a bearer token, and return the bearer response
+        """
         self.login()
-        granted = self.grant(client_id, redirect_uri, state)
+        granted = self.grant(client_id, redirect_uri, state, scopes)
         authcode = self.authorization_code_from_grant_response(granted, redirect_uri)
         bearer_resp = self.bearer(authcode, client_id, redirect_uri)
         bearer_json = json.loads(bearer_resp.data)
