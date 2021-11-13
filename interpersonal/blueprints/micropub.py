@@ -255,18 +255,22 @@ def micropub_blog_endpoint_POST(blog: HugoBase):
     # Ahh yes, the famous CUUD.
     # These are all actions supported by the spec:
     # supported_actions = ["delete", "undelete", "update", "create"]
+    # But I don't support them all right now:
     supported_actions = ["create"]
-
-    if action not in supported_actions:
-        return json_error(400, "invalid_request", f"'{action}' action not supported")
 
     if action not in verified["scopes"]:
         return json_error(
             403, "insufficient_scope", f"Access token not valid for action '{action}'"
         )
 
+    if action not in supported_actions:
+        return json_error(400, "invalid_request", f"'{action}' action not supported")
+    actest = request_body.get("interpersonal_action_test")
+    if actest:
+        return jsonify({"interpersonal_test_result": actest, "action": action})
+
     if action == "create":
-        return json_error(400, "invalid_request", f"'delete' action not supported")
+        return json_error(500, "invalid_request", f"Action not yet handled")
     else:
         return json_error(500, f"Unhandled action '{action}'")
 
