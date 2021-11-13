@@ -176,26 +176,6 @@ class CaseInsensitiveDict(dict):
 #     return final_parsed_url.geturl()
 
 
-def json_error(errcode: int, errmsg: str, errdesc: str = ""):
-    """Return JSON error"""
-    current_app.logger.error(
-        f"Error {errcode}: {errmsg}. Description: {errdesc or 'none'}"
-    )
-    return (
-        jsonify({"error": errmsg, "error_description": errdesc or ""}),
-        errcode,
-    )
-
-
-def render_error(errcode: int, errmsg: str):
-    """Render an HTTP error page and log it"""
-    current_app.logger.error(errmsg)
-    return (
-        render_template("error.html.j2", error_code=errcode, error_desc=errmsg),
-        errcode,
-    )
-
-
 def parse_opt_scope_list(scopes: typing.Optional[str]) -> typing.List[str]:
     """Parse scope input
 

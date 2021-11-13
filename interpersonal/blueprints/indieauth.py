@@ -24,9 +24,14 @@ from flask import (
 )
 
 from interpersonal import database, util
-from interpersonal.util import render_error, json_error
+from interpersonal.errors import (
+    InvalidBearerTokenError,
+    render_error,
+)
 
 bp = Blueprint("indieauth", __name__, url_prefix="/indieauth")
+
+bp.register_error_handler(InvalidBearerTokenError, InvalidBearerTokenError.handler)
 
 
 # These are mostly not used yet... I'd like to implement micropub at some point soon though
@@ -402,10 +407,6 @@ def redeem_auth_code(
     return finalrow
 
 
-class InvalidBearerTokenError(Exception):
-    pass
-
-
 class VerifiedBearerToken(typing.TypedDict):
     me: str
     client_id: str
@@ -429,7 +430,7 @@ def bearer_verify_token(token: str) -> VerifiedBearerToken:
         (token,),
     ).fetchone()
     if not row:
-        raise InvalidBearerTokenError(f"Invalid bearer token: {token}")
+        raise InvalidBearerTokenError(token)
     current_app.logger.debug(f"Found valid bearer token: {row}")
 
     return {
@@ -450,10 +451,7 @@ def bearer_GET():
     """
     authh = request.headers["Authorization"]
     token = re.sub("^Bearer ", "", authh)
-    try:
-        return jsonify(bearer_verify_token(token))
-    except InvalidBearerTokenError:
-        return json_error(400, f"Invalid bearer token '{token}'")
+    return jsonify(bearer_verify_token(token))
 
 
 @bp.route("/bearer", methods=["POST"])

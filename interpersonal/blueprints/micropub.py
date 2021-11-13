@@ -19,15 +19,43 @@ from flask import (
 from interpersonal import util
 from interpersonal.blueprints.indieauth import (
     ALL_HTTP_METHODS,
-    InvalidBearerTokenError,
     bearer_verify_token,
     indieauth_required,
 )
+
+#### WARNING!!! Make sure to register the error handler on each of these!
+from interpersonal.errors import (
+    MicropubBlogNotFoundError,
+    MicropubInsufficientScopeError,
+    MicropubInvalidRequestError,
+    MissingBearerAuthHeaderError,
+    MissingBearerTokenError,
+    InvalidBearerTokenError,
+    render_error,
+    json_error,
+)
 from interpersonal.sitetypes.base import HugoBase
-from interpersonal.util import render_error, json_error
 
 
 bp = Blueprint("micropub", __name__, url_prefix="/micropub")
+
+for err in [
+    MicropubBlogNotFoundError,
+    MicropubInsufficientScopeError,
+    MicropubInvalidRequestError,
+    MissingBearerAuthHeaderError,
+    MissingBearerTokenError,
+    InvalidBearerTokenError,
+]:
+    bp.register_error_handler(err, err.handler)
+
+
+def blog_from_blog_name(blog_name: str) -> HugoBase:
+    """Given a blog name, find a configured blog in the list"""
+    try:
+        return current_app.config["APPCONFIG"].blog(blog_name)
+    except KeyError:
+        raise MicropubBlogNotFoundError(blog_name)
 
 
 @bp.route("/")
@@ -41,14 +69,6 @@ def index():
     return render_template("micropub/index.html.j2", blogs=blogs)
 
 
-class MissingBearerAuthHeaderError(BaseException):
-    pass
-
-
-class MissingBearerTokenError(BaseException):
-    pass
-
-
 def bearer_verify_token_from_auth_header(auth_header: str):
     """Given an Authorization header, verify the token.
 
@@ -57,11 +77,11 @@ def bearer_verify_token_from_auth_header(auth_header: str):
     Raises exceptions if verification fails.
     """
     if not auth_header:
-        raise MissingBearerAuthHeaderError
+        raise MissingBearerAuthHeaderError()
 
     token = re.sub("Bearer ", "", auth_header)
     if not token:
-        raise MissingBearerTokenError
+        raise MissingBearerTokenError()
 
     verified = bearer_verify_token(token)
     current_app.logger.debug(
@@ -80,25 +100,11 @@ def micropub_blog_endpoint_GET(blog_name: str):
       (syndication targets currently not supported)
     * Retrieve metadata for a given URL, such as published date and tags, in microformats2-json format
     """
-    try:
-        blog = current_app.config["APPCONFIG"].blog(blog_name)
-    except KeyError:
-        return render_error(404, f"No such blog configured: {blog_name}")
+    blog = blog_from_blog_name(blog_name)
 
-    try:
-        verified = bearer_verify_token_from_auth_header(
-            request.headers.get("Authorization")
-        )
-    except MissingBearerAuthHeaderError:
-        return json_error(401, "unauthorized", "Missing Authorization header")
-    except MissingBearerTokenError:
-        return json_error(401, "unauthorized", "No token was provided")
-    except InvalidBearerTokenError as exc:
-        current_app.logger.debug(exc)
-        return json_error(401, "unauthorized", exc)
-    except BaseException as exc:
-        current_app.logger.debug(f"Unexpected exception: {exc}")
-        return json_error(500, "internal_server_error", exc)
+    verified = bearer_verify_token_from_auth_header(
+        request.headers.get("Authorization")
+    )
 
     q = request.args.get("q")
 
@@ -120,26 +126,20 @@ def micropub_blog_endpoint_GET(blog_name: str):
     elif q == "source":
         url = request.args.get("url")
         if not url:
-            return json_error(
-                400, "invalid_request", "Required 'url' parameter missing"
-            )
+            raise MicropubInvalidRequestError("Required 'url' parameter missing")
         try:
             post = blog.get_post(url)
             return jsonify(post.frontmatter)
         # TODO: Raise a specific error in the blog object when a post is not found
         except KeyError:
             return json_error(404, "no such blog post")
-        except BaseException as exc:
-            return json_error(500, "internal server error", exc)
 
     elif q == "syndicate-to":
-        return json_error(400, "invalid_request", "syndication is not implemented")
+        raise MicropubInvalidRequestError("syndication is not implemented")
 
     else:
-        return json_error(
-            400,
-            "invalid_request",
-            "Valid authorization, but invalid or missing 'q' parameter",
+        raise MicropubInvalidRequestError(
+            "Valid authorization, but invalid or missing 'q' parameter"
         )
 
 
@@ -149,43 +149,28 @@ def micropub_blog_endpoint_POST(blog_name: str):
 
     Used by clients to change content (CRUD operations on posts)
     """
-    try:
-        blog = current_app.config["APPCONFIG"].blog(blog_name)
-    except KeyError:
-        return render_error(404, f"No such blog configured: {blog_name}")
+    blog = blog_from_blog_name(blog_name)
 
-    try:
-        form_encoded = request.headers.get("Content-type") in [
-            "application/x-www-form-urlencoded",
-            "multipart/form-data",
-        ]
-        form_auth_token = request.form.get("auth_token")
-        if form_encoded and form_auth_token:
-            verified = bearer_verify_token(form_auth_token)
-        else:
-            verified = bearer_verify_token_from_auth_header(
-                request.headers.get("Authorization")
-            )
-    except MissingBearerAuthHeaderError:
-        return json_error(401, "unauthorized", "Missing Authorization header")
-    except MissingBearerTokenError:
-        return json_error(401, "unauthorized", "No token was provided")
-    except InvalidBearerTokenError as exc:
-        current_app.logger.debug(exc)
-        return json_error(401, "unauthorized", exc)
-    except BaseException as exc:
-        current_app.logger.debug(f"Unexpected exception: {exc}")
-        return json_error(500, "internal_server_error", exc)
+    form_encoded = request.headers.get("Content-type") in [
+        "application/x-www-form-urlencoded",
+        "multipart/form-data",
+    ]
+    form_auth_token = request.form.get("auth_token")
+    if form_encoded and form_auth_token:
+        verified = bearer_verify_token(form_auth_token)
+    else:
+        verified = bearer_verify_token_from_auth_header(
+            request.headers.get("Authorization")
+        )
 
     auth_test = request.headers.get("X-Interpersonal-Auth-Test")
     # Check for the header we use in testing, and return a success message
     if auth_test:
         return jsonify({"interpersonal_test_result": "authentication_success"})
 
-    try:
-        content_type = request.headers["Content-type"]
-    except KeyError:
-        return json_error(400, "invalid_request", "No 'Content-type' header")
+    content_type = request.headers.get("Content-type")
+    if not content_type:
+        raise MicropubInvalidRequestError("No 'Content-type' header")
 
     request_body = {}
     request_files = {}
@@ -197,9 +182,7 @@ def micropub_blog_endpoint_POST(blog_name: str):
         request_body = request.form
         request_files = {f.filename: f for f in request.files.getlist("file")}
     else:
-        return json_error(
-            400, "invalid_request", f"Invalid 'Content-type': '{content_type}'"
-        )
+        raise MicropubInvalidRequestError(f"Invalid 'Content-type': '{content_type}'")
 
     request_file_names = [n for n in request_files.keys()]
 
@@ -224,12 +207,10 @@ def micropub_blog_endpoint_POST(blog_name: str):
     supported_actions = ["create"]
 
     if action not in verified["scopes"]:
-        return json_error(
-            403, "insufficient_scope", f"Access token not valid for action '{action}'"
-        )
+        raise MicropubInsufficientScopeError(action)
 
     if action not in supported_actions:
-        return json_error(400, "invalid_request", f"'{action}' action not supported")
+        raise MicropubInvalidRequestError(f"'{action}' action not supported")
     actest = request_body.get("interpersonal_action_test")
     if actest:
         return jsonify({"interpersonal_test_result": actest, "action": action})
