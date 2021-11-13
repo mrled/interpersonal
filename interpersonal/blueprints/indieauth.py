@@ -439,6 +439,8 @@ def bearer_verify_token(token: str) -> VerifiedBearerToken:
     }
 
 
+@bp.route("/bearer", methods=["GET"])
+@indieauth_required(ALL_HTTP_METHODS)
 def bearer_GET():
     """Handle a GET request for the bearer endpoint
 
@@ -454,6 +456,8 @@ def bearer_GET():
         return json_error(400, f"Invalid bearer token '{token}'")
 
 
+@bp.route("/bearer", methods=["POST"])
+@indieauth_required(ALL_HTTP_METHODS)
 def bearer_POST():
     """Handle a POST request for the bearer endpoint.
 
@@ -512,18 +516,3 @@ def bearer_POST():
         "scope": code_row["scopes"],
     }
     return jsonify(response)
-
-
-@bp.route("/bearer", methods=["GET", "POST"])
-@indieauth_required(ALL_HTTP_METHODS)
-def bearer():
-    """The IndieAuth bearer token endpoint
-
-    GET:    Verify an existing access token
-    POST:   Exchange an authorization code from the authorization endpoint
-            for an access token and mark the authorization code as used
-    """
-    if request.method == "GET":
-        return bearer_GET()
-    if request.method == "POST":
-        return bearer_POST()

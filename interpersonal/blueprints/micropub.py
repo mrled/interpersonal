@@ -117,7 +117,8 @@ def bearer_verify_token_from_auth_header(auth_header: str):
     return verified
 
 
-def micropub_blog_endpoint_GET(blog: HugoBase):
+@bp.route("/<blog_name>", methods=["GET"])
+def micropub_blog_endpoint_GET(blog_name: str):
     """The GET verb for the micropub blog route
 
     Used by clients to:
@@ -125,6 +126,10 @@ def micropub_blog_endpoint_GET(blog: HugoBase):
       (syndication targets currently not supported)
     * Retrieve metadata for a given URL, such as published date and tags, in microformats2-json format
     """
+    try:
+        blog = current_app.config["APPCONFIG"].blog(blog_name)
+    except KeyError:
+        return render_error(404, f"No such blog configured: {blog_name}")
 
     try:
         verified = bearer_verify_token_from_auth_header(
@@ -184,11 +189,17 @@ def micropub_blog_endpoint_GET(blog: HugoBase):
         )
 
 
-def micropub_blog_endpoint_POST(blog: HugoBase):
+@bp.route("/<blog_name>", methods=["POST"])
+def micropub_blog_endpoint_POST(blog_name: str):
     """The POST verb for the micropub blog route
 
     Used by clients to change content (CRUD operations on posts)
     """
+    try:
+        blog = current_app.config["APPCONFIG"].blog(blog_name)
+    except KeyError:
+        return render_error(404, f"No such blog configured: {blog_name}")
+
     try:
         form_encoded = request.headers.get("Content-type") in [
             "application/x-www-form-urlencoded",
@@ -273,23 +284,6 @@ def micropub_blog_endpoint_POST(blog: HugoBase):
         return json_error(500, "invalid_request", f"Action not yet handled")
     else:
         return json_error(500, f"Unhandled action '{action}'")
-
-
-@bp.route("/<blog_name>", methods=["GET", "POST"])
-def micropub_blog_endpoint(blog_name):
-    """The micropub endpoint
-
-    Note that bearer_GET requires authentication in the
-    """
-    try:
-        blog = current_app.config["APPCONFIG"].blog(blog_name)
-    except KeyError:
-        return render_error(404, f"No such blog configured: {blog_name}")
-
-    if request.method == "GET":
-        return micropub_blog_endpoint_GET(blog)
-    if request.method == "POST":
-        return micropub_blog_endpoint_POST(blog)
 
 
 @bp.route("/<blog_name>/media")
