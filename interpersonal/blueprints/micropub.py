@@ -189,6 +189,41 @@ def process_POST_body(
     return (request_body, request_files)
 
 
+def new_post_from_request(request_body: typing.Dict, blog: HugoBase):
+    """Instruct the blog to create a new post
+
+    request_body:   Dict from a parsed and normalized request body
+    blog:           The blog to create the post on
+    """
+    frontmatter = {}
+    content = ""
+    slug = ""
+    content_type = ""
+    # TODO: add test for urlencoded body where k ends with [] to indicate an array
+    # e.g. ?tag[]=hacking&tag[]=golang should end up with both 'hacking' and 'golang' tags
+    for k, v in request_body.items():
+        if k == "h":
+            content_type = v
+        elif k == "content":
+            content = v
+        elif k == "slug":
+            slug = v
+        else:
+            frontmatter[k] = v
+    if not slug:
+        raise MicropubInvalidRequestError("Missing 'slug'")
+    if not content:
+        raise MicropubInvalidRequestError("Missing 'content'")
+    if not content_type:
+        raise MicropubInvalidRequestError("Missing 'h'")
+    if "date" not in frontmatter:
+        frontmatter["date"] = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    new_post_location = blog.add_post(slug, frontmatter, content)
+    resp = Response("")
+    resp.headers["Location"] = new_post_location
+    return resp
+
+
 @bp.route("/<blog_name>", methods=["POST"])
 def micropub_blog_endpoint_POST(blog_name: str):
     """The POST verb for the micropub blog route
@@ -240,33 +275,7 @@ def micropub_blog_endpoint_POST(blog_name: str):
         return jsonify({"interpersonal_test_result": actest, "action": action})
 
     if action == "create":
-        frontmatter = {}
-        content = ""
-        slug = ""
-        content_type = ""
-        # TODO: add test for urlencoded body where k ends with [] to indicate an array
-        # e.g. ?tag[]=hacking&tag[]=golang should end up with both 'hacking' and 'golang' tags
-        for k, v in request_body.items():
-            if k == "h":
-                content_type = v
-            elif k == "content":
-                content = v
-            elif k == "slug":
-                slug = v
-            else:
-                frontmatter[k] = v
-        if not slug:
-            raise MicropubInvalidRequestError("Missing 'slug'")
-        if not content:
-            raise MicropubInvalidRequestError("Missing 'content'")
-        if not content_type:
-            raise MicropubInvalidRequestError("Missing 'h'")
-        if "date" not in frontmatter:
-            frontmatter["date"] = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-        new_post_location = blog.add_post(slug, frontmatter, content)
-        resp = Response("")
-        resp.headers["Location"] = new_post_location
-        return resp
+        return new_post_from_request(request_body, blog)
     else:
         return json_error(500, f"Unhandled action '{action}'")
 
