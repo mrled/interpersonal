@@ -1,53 +1,14 @@
 """The base class for Hugo blogs"""
 
 import copy
-import dataclasses
 import os
 import re
 import typing
-from datetime import datetime
+from datetime import date, datetime
 
 import yaml
 
 from interpersonal.util import CaseInsensitiveDict
-
-
-@dataclasses.dataclass
-class ParsedPost:
-    """A post with its metadata"""
-
-    # Frontmatter is a dict with case insensitve keys. Why?
-    # Because Hugo isn't consistent and this is easier.
-    frontmatter: CaseInsensitiveDict
-
-    body: str
-
-
-def parse_post_content(post_content: str) -> ParsedPost:
-    """Parse metadata from contents of a post with YAML frontmatter
-
-    Pass in the post content as a string, including YAML frontmatter and post body.
-    """
-
-    post_content = post_content.strip()
-
-    yaml_start_str = "---\n"
-    yaml_end_str = "\n---\n"
-
-    if not post_content.startswith(yaml_start_str):
-        # No YAML frontmatter found
-        return ParsedPost({}, post_content)
-
-    yaml_start_idx = len(yaml_start_str)
-    yaml_end_idx = post_content.index(yaml_end_str)
-    yaml_raw = post_content[yaml_start_idx:yaml_end_idx]
-
-    frontmatter = CaseInsensitiveDict(yaml.load(yaml_raw, yaml.Loader))
-
-    content_start_idx = yaml_end_idx + len(yaml_end_str)
-    body = post_content[content_start_idx:]
-
-    return ParsedPost(frontmatter, body)
 
 
 def normalize_baseuri(baseuri: str) -> str:
@@ -66,10 +27,30 @@ class HugoPostSource:
         self.content = content
 
     @classmethod
-    def fromstr(cls, s: str) -> "HugoPostSource":
-        """Create a post from the string contents fo a file"""
-        fm, body = parse_post_content(s)
-        return cls(fm, body)
+    def fromstr(cls, post_content: str) -> "HugoPostSource":
+        """Create a post from the string contents fo a file
+
+        Pass in the post content as a string, including YAML frontmatter and post body.
+        """
+        post_content = post_content.strip()
+
+        yaml_start_str = "---\n"
+        yaml_end_str = "\n---\n"
+
+        if not post_content.startswith(yaml_start_str):
+            # No YAML frontmatter found
+            return cls({}, post_content)
+
+        yaml_start_idx = len(yaml_start_str)
+        yaml_end_idx = post_content.index(yaml_end_str)
+        yaml_raw = post_content[yaml_start_idx:yaml_end_idx]
+
+        frontmatter = CaseInsensitiveDict(yaml.load(yaml_raw, yaml.Loader))
+
+        content_start_idx = yaml_end_idx + len(yaml_end_str)
+        body = post_content[content_start_idx:]
+
+        return cls(frontmatter, body)
 
     def tostr(self) -> str:
         return "\n---\n{}\n---\n\n{}".format(yaml.dump(self.frontmatter), self.content)
@@ -89,17 +70,20 @@ class HugoPostSource:
         if "description" in fm:
             props["summary"] = [fm["description"]]
         if "date" in fm:
-            if not isinstance(fm["date"], datetime):
-                fm["date"] = datetime.fromisoformat(fm["date"].replace("Z", "+00:00"))
-            props["published"] = [fm["date"].isoformat(timespec="seconds")]
+            pubdate = fm["date"]
+            if type(pubdate) == date:
+                pubdate = datetime(pubdate.year, pubdate.month, pubdate.day)
+            if not isinstance(pubdate, datetime):
+                pubdate = datetime.fromisoformat(pubdate.replace("Z", "+00:00"))
+            props["published"] = [pubdate.isoformat(timespec="seconds")]
         if "updated" in fm:
             if not isinstance(fm["updated"], datetime):
                 fm["updated"] = datetime.fromisoformat(
                     fm["updated"].replace("Z", "+00:00")
                 )
             props["updated"] = [fm["updated"].isoformat(timespec="seconds")]
-        if "taxonomies" in fm and "tag" in fm["taxonomies"]:
-            props["category"] = fm["taxonomies"]["tag"]
+        if "tags" in fm:
+            props["category"] = fm["tags"]
         if len(self.content.strip()) > 0:
             props["content"] = [{"markdown": self.content}]
         return {"properties": props}
@@ -135,9 +119,9 @@ class HugoBase:
         """Subclasses must implement"""
         raise NotImplementedError("Please implement this in the subclass")
 
-    def get_post(self, uri) -> ParsedPost:
+    def get_post(self, uri) -> HugoPostSource:
         raw_post = self._get_raw_post_body(uri)
-        return parse_post_content(raw_post)
+        return HugoPostSource.fromstr(raw_post)
 
     def add_post(self, slug: str, frontmatter: typing.Dict, content: str) -> str:
         post = HugoPostSource(frontmatter, content)

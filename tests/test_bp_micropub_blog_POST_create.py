@@ -1,5 +1,5 @@
-import io
 import json
+from datetime import datetime
 from urllib.parse import urlencode
 
 from flask.app import Flask
@@ -84,13 +84,14 @@ def test_action_create(
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
         slug = "blog/test-poast-1"
         post_uri = f"{testconstsfix.blog_uri}/{slug}"
+        post_content = "Here I am just simply poasting a test poast"
         resp = client.post(
             "/micropub/example",
             data={
                 "auth_token": z2btd.btoken,
                 "action": "create",
                 "h": "entry",
-                "content": "Here I am just simply poasting a test poast",
+                "content": post_content,
                 "slug": slug,
                 # "tags": "testing",
                 # "tags": "poasting",
@@ -120,8 +121,11 @@ def test_action_create(
         try:
             assert resp.status_code == 200
             json_data = json.loads(resp.data)
-            assert json_data["action"] == "create"
-            assert json_data["auth_token"] == z2btd.btoken
+            props = json_data["properties"]
+            pubdate = datetime.strptime(props["published"][0], "%Y-%m-%dT%H:%M:%S")
+            assert pubdate.strftime("%Y-%m-%d") == datetime.now().strftime("%Y-%m-%d")
+            retrvd_content = props["content"][0]["markdown"].strip()
+            assert retrvd_content == post_content
         except BaseException:
             print(f"Failing test. Response body: {resp.data}")
             raise

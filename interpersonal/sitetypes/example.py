@@ -51,7 +51,7 @@ class HugoExampleRepo(base.HugoBase):
         self.posts = _example_repo_posts
         super().__init__(name, uri)
 
-    def _get_raw_post_body(self, uri: str) -> base.HugoPostSource:
+    def _get_raw_post_body(self, uri: str) -> str:
         path = re.sub(re.escape(self.baseuri), "", uri)
         if not path.startswith("/"):
             path = f"/{path}"

@@ -85,14 +85,19 @@ def test_micropub_blog_endpoint_GET_source_valid_url(
             endpoint,
             headers=headers,
         )
-        assert response.status_code == 200
-        # Should be something like this:
-        # {'date': 'Wed, 27 Jan 2021 00:00:00 GMT', 'tags': ['billbert', 'bobson'], 'title': 'Post one'}
-        response_json = json.loads(response.data)
-        assert "date" in response_json
-        assert "tags" in response_json
-        assert "title" in response_json
-        assert response_json["title"] == "Post one"
+
+        try:
+            assert response.status_code == 200
+            # Should be something like this:
+            # {'published': 'Wed, 27 Jan 2021 00:00:00 GMT', 'tags': ['billbert', 'bobson'], 'title': 'Post one'}
+            props = json.loads(response.data)["properties"]
+            assert "published" in props
+            assert "category" in props
+            assert "name" in props
+            assert props["name"][0] == "Post one"
+        except BaseException:
+            print(f"Failing test. Response body: {response.data}")
+            raise
 
 
 def test_micropub_blog_endpoint_GET_source_invalid_url(

@@ -134,7 +134,7 @@ def micropub_blog_endpoint_GET(blog_name: str):
             raise MicropubInvalidRequestError("Required 'url' parameter missing")
         try:
             post = blog.get_post(url)
-            return jsonify(post.frontmatter)
+            return jsonify(post.mf2json)
         # TODO: Raise a specific error in the blog object when a post is not found
         except KeyError:
             return json_error(404, "no such blog post")
