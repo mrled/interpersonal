@@ -70,4 +70,4 @@ class MicropubBlogNotFoundError(Exception):
 
     @staticmethod
     def handler(exc):
-        return render_error(404, f"No such blog configured: {self.blog_name}")
+        return render_error(404, f"No such blog configured: {exc.blog_name}")
