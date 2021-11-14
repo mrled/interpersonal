@@ -190,33 +190,6 @@ def test_content_type_multipart_form(
             raise
 
 
-def test_action_create(app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient):
-    """Content-type of application/x-www-form-urlencoded should parse correctly"""
-    with app.app_context():
-        z2btd = indieauthfix.zero_to_bearer_with_test_data()
-        actest_value = "an testing value,,,"
-        headers = Headers()
-        headers["Authorization"] = f"Bearer {z2btd.btoken}"
-        resp = client.post(
-            "/micropub/example",
-            data={
-                "auth_token": z2btd.btoken,
-                "action": "create",
-                "interpersonal_action_test": actest_value,
-            },
-            headers=headers,
-        )
-
-        try:
-            assert resp.status_code == 200
-            respjson = json.loads(resp.data)
-            assert respjson["interpersonal_test_result"] == actest_value
-            assert respjson["action"] == "create"
-        except BaseException:
-            print(f"Failing test. Response body: {resp.data}")
-            raise
-
-
 def test_action_delete(app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient):
     """Content-type of application/x-www-form-urlencoded should parse correctly"""
     with app.app_context():

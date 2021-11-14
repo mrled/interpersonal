@@ -4,21 +4,26 @@ Kept separate from indieauth, but note that it must know of the indieauth token
 endpoint in advance, so there is some coupling.
 """
 
+import datetime
 import json
 import re
+import typing
 
 from flask import (
     Blueprint,
+    Request,
     current_app,
     jsonify,
     render_template,
     request,
     url_for,
 )
+from flask.wrappers import Response
 
 from interpersonal import util
 from interpersonal.blueprints.indieauth import (
     ALL_HTTP_METHODS,
+    VerifiedBearerToken,
     bearer_verify_token,
     indieauth_required,
 )
@@ -143,6 +148,47 @@ def micropub_blog_endpoint_GET(blog_name: str):
         )
 
 
+def authenticate_POST(req: Request) -> VerifiedBearerToken:
+    """Authenticate a POST request
+
+    POST requetss can be authenticated by either an auth token header or an
+    auth token in the submitted form.
+    """
+    form_encoded = req.headers.get("Content-type") in [
+        "application/x-www-form-urlencoded",
+        "multipart/form-data",
+    ]
+    form_auth_token = req.form.get("auth_token")
+    if form_encoded and form_auth_token:
+        verified = bearer_verify_token(form_auth_token)
+    else:
+        verified = bearer_verify_token_from_auth_header(
+            req.headers.get("Authorization")
+        )
+    return verified
+
+
+def process_POST_body(
+    req: Request, content_type: str
+) -> typing.Tuple[typing.Dict, typing.Dict]:
+    """Process a POST request body and return a tuple of the body and files
+
+    Manage a POST body whether it is in JSON format or a form
+    """
+    request_body = {}
+    request_files = {}
+    if content_type == "application/json":
+        request_body = json.loads(req.data)
+    elif content_type == "application/x-www-form-urlencoded":
+        request_body = req.form
+    elif content_type.startswith("multipart/form-data"):
+        request_body = req.form
+        request_files = {f.filename: f for f in req.files.getlist("file")}
+    else:
+        raise MicropubInvalidRequestError(f"Invalid 'Content-type': '{content_type}'")
+    return (request_body, request_files)
+
+
 @bp.route("/<blog_name>", methods=["POST"])
 def micropub_blog_endpoint_POST(blog_name: str):
     """The POST verb for the micropub blog route
@@ -150,18 +196,7 @@ def micropub_blog_endpoint_POST(blog_name: str):
     Used by clients to change content (CRUD operations on posts)
     """
     blog = blog_from_blog_name(blog_name)
-
-    form_encoded = request.headers.get("Content-type") in [
-        "application/x-www-form-urlencoded",
-        "multipart/form-data",
-    ]
-    form_auth_token = request.form.get("auth_token")
-    if form_encoded and form_auth_token:
-        verified = bearer_verify_token(form_auth_token)
-    else:
-        verified = bearer_verify_token_from_auth_header(
-            request.headers.get("Authorization")
-        )
+    verified = authenticate_POST(request)
 
     auth_test = request.headers.get("X-Interpersonal-Auth-Test")
     # Check for the header we use in testing, and return a success message
@@ -172,18 +207,7 @@ def micropub_blog_endpoint_POST(blog_name: str):
     if not content_type:
         raise MicropubInvalidRequestError("No 'Content-type' header")
 
-    request_body = {}
-    request_files = {}
-    if content_type == "application/json":
-        request_body = json.loads(request.data)
-    elif content_type == "application/x-www-form-urlencoded":
-        request_body = request.form
-    elif content_type.startswith("multipart/form-data"):
-        request_body = request.form
-        request_files = {f.filename: f for f in request.files.getlist("file")}
-    else:
-        raise MicropubInvalidRequestError(f"Invalid 'Content-type': '{content_type}'")
-
+    request_body, request_files = process_POST_body(request, content_type)
     request_file_names = [n for n in request_files.keys()]
 
     contype_test = request_body.get("interpersonal_content-type_test")
@@ -216,7 +240,33 @@ def micropub_blog_endpoint_POST(blog_name: str):
         return jsonify({"interpersonal_test_result": actest, "action": action})
 
     if action == "create":
-        return json_error(500, "invalid_request", f"Action not yet handled")
+        frontmatter = {}
+        content = ""
+        slug = ""
+        content_type = ""
+        # TODO: add test for urlencoded body where k ends with [] to indicate an array
+        # e.g. ?tag[]=hacking&tag[]=golang should end up with both 'hacking' and 'golang' tags
+        for k, v in request_body.items():
+            if k == "h":
+                content_type = v
+            elif k == "content":
+                content = v
+            elif k == "slug":
+                slug = v
+            else:
+                frontmatter[k] = v
+        if not slug:
+            raise MicropubInvalidRequestError("Missing 'slug'")
+        if not content:
+            raise MicropubInvalidRequestError("Missing 'content'")
+        if not content_type:
+            raise MicropubInvalidRequestError("Missing 'h'")
+        if "date" not in frontmatter:
+            frontmatter["date"] = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+        new_post_location = blog.add_post(slug, frontmatter, content)
+        resp = Response("")
+        resp.headers["Location"] = new_post_location
+        return resp
     else:
         return json_error(500, f"Unhandled action '{action}'")
 

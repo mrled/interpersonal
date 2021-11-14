@@ -2,6 +2,7 @@
 
 import re
 import textwrap
+import typing
 
 from interpersonal.sitetypes import base
 
@@ -55,3 +56,9 @@ class HugoExampleRepo(base.HugoBase):
         if not path.startswith("/"):
             path = f"/{path}"
         return self.posts[path]
+
+    def _add_raw_post_body(self, slug: str, raw_body: str) -> str:
+        if slug.startswith("/"):
+            slug = slug[1:]
+        self.posts[f"/{slug}"] = raw_body
+        return f"{self.baseuri}{slug}"

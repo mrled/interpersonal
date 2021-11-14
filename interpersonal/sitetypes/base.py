@@ -71,6 +71,9 @@ class HugoPostSource:
         fm, body = parse_post_content(s)
         return cls(fm, body)
 
+    def tostr(self) -> str:
+        return "\n---\n{}\n---\n\n{}".format(yaml.dump(self.frontmatter), self.content)
+
     @property
     def mf2json(self):
         """Return a microformats2-parsing JSON object for the post
@@ -109,6 +112,9 @@ class HugoBase:
     - Content is made of .md files only; cannot handle .html or .markdown or other extensions
     - Pages are always in a directory and named index.md - everything uses a Hugo pagebundle
     - Frontmatter is YAML. YAML has problems, but TOML sux, don't @ me tomlailures
+
+    TODO: Only built for h-entry at this point
+          Not sure what a more general implementation would look like
     """
 
     def __init__(self, name: str, baseuri: str):
@@ -132,3 +138,10 @@ class HugoBase:
     def get_post(self, uri) -> ParsedPost:
         raw_post = self._get_raw_post_body(uri)
         return parse_post_content(raw_post)
+
+    def add_post(self, slug: str, frontmatter: typing.Dict, content: str) -> str:
+        post = HugoPostSource(frontmatter, content)
+        return self._add_raw_post_body(slug, post.tostr())
+
+    def _add_raw_post_body(self, slug: str, raw_body: str):
+        raise NotImplementedError("Please implement this in the subclass")
