@@ -8,8 +8,10 @@ cookie_secret_key: any value is fine in dev, even this literal string
 blogs:
   - name: example
     type: built-in example
-  # - name: example-blog
+    uri: https://example.com/blog/
+  # - name: interpersonal-test
   #   type: github
-  #   uri: https://blog.example.com/
-  #   github_repo: youruser/blogrepo
-  #   github_token: 12345ASDFG
+  #   uri: https://interpersonal-test-blog.netlify.app/
+  #   github_owner: mrled
+  #   github_repo: interpersonal-test-blog
+  #   github_token: <your github personal token here>

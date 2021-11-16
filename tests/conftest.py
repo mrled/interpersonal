@@ -23,6 +23,12 @@ blogs:
   - name: example
     type: built-in example
     uri: {baseuri}
+  - name: {github_e2e_blog_name}
+    type: github
+    uri: {github_e2e_blog_uri}
+    github_owner: {github_e2e_repo_owner}
+    github_repo: {github_e2e_repo_name}
+    github_token: {github_e2e_personal_token}
 """
 
 
@@ -32,6 +38,12 @@ class TestConsts:
     owner_profile = "https://interpersonal.example.org/"
     sql_data = TEST_SQL_DATA
     blog_uri = "http://interpersonal.example.org"
+
+    github_e2e_blog_name = "interpersonal-test-blog"
+    github_e2e_blog_uri = os.environ.get("INTERPERSONAL_TEST_GITHUB_BLOG_URI")
+    github_e2e_repo_owner = os.environ.get("INTERPERSONAL_TEST_GITHUB_OWNER")
+    github_e2e_repo_name = os.environ.get("INTERPERSONAL_TEST_GITHUB_REPO")
+    github_e2e_personal_token = os.environ.get("INTERPERSONAL_TEST_GITHUB_TOKEN")
 
 
 @pytest.fixture
@@ -50,6 +62,11 @@ def app():
         owner_profile=TestConsts.owner_profile,
         cookie_secret_key=TestConsts.cookie_secret_key,
         baseuri=TestConsts.blog_uri,
+        github_e2e_blog_name=TestConsts.github_e2e_blog_name,
+        github_e2e_blog_uri=TestConsts.github_e2e_blog_uri,
+        github_e2e_repo_owner=TestConsts.github_e2e_repo_owner,
+        github_e2e_repo_name=TestConsts.github_e2e_repo_name,
+        github_e2e_personal_token=TestConsts.github_e2e_personal_token,
     )
     os.write(conf_fd, appconfig_str.encode())
 

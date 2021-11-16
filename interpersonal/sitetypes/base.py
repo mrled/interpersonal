@@ -110,9 +110,12 @@ class HugoBase:
 
         This requries the canonical URI, not any kind of alias.
         """
-        baseuri_re = "^" + re.escape(self.baseuri)
-        hugo_bundle_path = re.sub(baseuri_re, "content/", uri)
-        index = os.path.join(hugo_bundle_path, "index.md")
+        baseuri_escd = re.escape(self.baseuri)
+        baseuri_re = f"^{baseuri_escd}/*"
+        hugo_bundle_path = re.sub(baseuri_re, "", uri)
+        if hugo_bundle_path.startswith("/"):
+            hugo_bundle_path = hugo_bundle_path[1:]
+        index = os.path.join("content", hugo_bundle_path, "index.md")
         return index
 
     def _get_raw_post_body(self, uri) -> str:

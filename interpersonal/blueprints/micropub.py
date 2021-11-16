@@ -202,12 +202,16 @@ def new_post_from_request(request_body: typing.Dict, blog: HugoBase):
     # TODO: add test for urlencoded body where k ends with [] to indicate an array
     # e.g. ?tag[]=hacking&tag[]=golang should end up with both 'hacking' and 'golang' tags
     for k, v in request_body.items():
-        if k == "h":
+        if k in ["auth_token", "action"]:
+            continue
+        elif k == "h":
             content_type = v
         elif k == "content":
             content = v
         elif k == "slug":
             slug = v
+        elif k == "name":
+            frontmatter["title"] = v
         else:
             frontmatter[k] = v
     if not slug:

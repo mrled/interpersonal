@@ -37,6 +37,7 @@ class AppConfig:
                 blog = github.HugoGithubRepo(
                     yamlblog["name"],
                     yamlblog["uri"],
+                    yamlblog["github_owner"],
                     yamlblog["github_repo"],
                     yamlblog["github_token"],
                 )
@@ -56,4 +57,4 @@ class AppConfig:
         for blog in self.blogs:
             if blog.name == name:
                 return blog
-            raise KeyError(f"No blog with name '{name}'")
+        raise KeyError(f"No blog with name '{name}'")

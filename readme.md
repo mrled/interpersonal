@@ -47,6 +47,31 @@ coverage run -m pytest
 coverage report
 ```
 
+To run the e2e tests against the real github repo, you need a repo to run against.
+Mine is <https://github.com/mrled/interpersonal-test-blog>.
+Then:
+
+```sh
+export INTERPERSONAL_TEST_GITHUB_BLOG_URI=https://interpersonal-test-blog.netlify.app/
+export INTERPERSONAL_TEST_GITHUB_OWNER=mrled
+export INTERPERSONAL_TEST_GITHUB_REPO=interpersonal-test-blog
+export INTERPERSONAL_TEST_GITHUB_TOKEN=<my personal github token>
+
+INTERPERSONAL_TEST_GITHUB_RUN_E2E_TESTS=true pytest tests/test_e2e_github.py
+```
+
+Note that actually deploying this on Netlify (or anywhere else) is not necessary,
+as you can just check the status of your commits on github.com.
+The blog URI isn't used for anything either.
+That said, in this case I did actually deploy to Netlify, so that is a real URL.
+(Is it weird that it's satisfying to see my test posts show up on the deployed site?)
+
+### Cert errors on macOS
+
+For some reason you have to run `sudo /Applications/Python\ $version/Install\ Certificates.command` (e.g. for Python 3.9 `sudo /Applications/Python\ 3.9/Install\ Certificates.command`) to fix certificate errors when running on macOS.
+
+If you're getting errors like `CERTIFICATE_VERIFY_FAILED` when trying to talk to the Github API, this may be your issue.
+
 ## Production
 
 Interpersonal is a pretty standard Flask app.
@@ -58,7 +83,6 @@ To create a good cookie secret, run something like:
 ```sh
 python3 -c 'import base64, os; print(base64.b64encode(os.urandom(32)).decode())'
 ```
-
 
 Create a virtual environment somewhere and install dependencies,
 then configure the app:
@@ -80,7 +104,7 @@ echo "$INTERPERSONAL_COOKIE_SECRET_KEY"
 ```
 
 Then create a WSGI file.
-Note that you must hard-code the database path and cookie key.
+Note that you must hard-code the config path.
 (You might think that you can instead use environment variables
 with Apache's `SetEnv`, but this doesn't work:
 <https://stackoverflow.com/questions/9016504/apache-setenv-not-working-as-expected-with-mod-wsgi>.)
@@ -136,3 +160,7 @@ all of which might easily be termed "tokens" or "codes" or "secrets".
 * Deploy it for production (per above) and note the URI, like `interpersonal.example.com`.
 * On your own website at your own domain, add a link with the appropriate `rel` attribute, like
   `<link rel="authorization_endpoint" href="https://interpersonal.example.com/indieauth/authorize">`
+
+## TODO
+
+* Should move to oauth token for github blogs, not a personal token which can access any private repo
