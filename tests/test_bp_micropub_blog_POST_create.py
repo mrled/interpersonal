@@ -123,7 +123,8 @@ def test_action_create(
             json_data = json.loads(resp.data)
             props = json_data["properties"]
             pubdate = datetime.strptime(props["published"][0], "%Y-%m-%dT%H:%M:%S")
-            assert pubdate.strftime("%Y-%m-%d") == datetime.now().strftime("%Y-%m-%d")
+            now = datetime.utcnow()
+            assert pubdate.strftime("%Y-%m-%d") == now.strftime("%Y-%m-%d")
             retrvd_content = props["content"][0]["markdown"].strip()
             assert retrvd_content == post_content
         except BaseException:
