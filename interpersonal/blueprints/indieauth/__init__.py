@@ -31,6 +31,7 @@ from interpersonal.errors import (
     IndieauthInvalidGrantError,
     InvalidAuthCodeError,
     InvalidBearerTokenError,
+    catchall_error_handler,
     render_error,
 )
 
@@ -43,6 +44,7 @@ for err in [
     InvalidBearerTokenError,
 ]:
     bp.register_error_handler(err, err.handler)
+bp.register_error_handler(Exception, catchall_error_handler)
 
 
 # These are mostly not used yet... I'd like to implement micropub at some point soon though
@@ -476,6 +478,9 @@ def bearer_POST():
 
     <https://indieweb.org/token-endpoint#Granting_an_Access_Token>
     """
+
+    current_app.logger.debug(f"bearer_POST(): request.form: {request.form}")
+
     db = database.get_db()
 
     action = request.form.get("action")

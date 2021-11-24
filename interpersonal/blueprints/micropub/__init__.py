@@ -35,6 +35,7 @@ from interpersonal.errors import (
     MissingBearerAuthHeaderError,
     MissingBearerTokenError,
     InvalidBearerTokenError,
+    catchall_error_handler,
     json_error,
 )
 from interpersonal.sitetypes.base import HugoBase
@@ -51,6 +52,7 @@ for err in [
     InvalidBearerTokenError,
 ]:
     bp.register_error_handler(err, err.handler)
+bp.register_error_handler(Exception, catchall_error_handler)
 
 
 def blog_from_blog_name(blog_name: str) -> HugoBase:

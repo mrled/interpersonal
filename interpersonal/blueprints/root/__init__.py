@@ -4,8 +4,11 @@ from flask import (
     render_template,
 )
 
+from interpersonal.errors import catchall_error_handler
+
 
 bp = Blueprint("root", __name__, template_folder="temple")
+bp.register_error_handler(Exception, catchall_error_handler)
 
 
 @bp.route("/")

@@ -1,3 +1,5 @@
+import traceback
+
 from flask import current_app, jsonify, render_template
 
 
@@ -19,6 +21,12 @@ def render_error(errcode: int, errmsg: str):
         render_template("error.html.j2", error_code=errcode, error_desc=errmsg),
         errcode,
     )
+
+
+def catchall_error_handler(exc: Exception):
+    """Handler for any error"""
+    current_app.logger.exception(exc)
+    return json_error(500, "Unhandled internal error", str(exc))
 
 
 class InvalidAuthCodeError(Exception):
