@@ -23,6 +23,7 @@ blogs:
   - name: example
     type: built-in example
     uri: {baseuri}
+    slugprefix: /blog
   - name: {github_e2e_blog_name}
     type: github
     uri: {github_e2e_blog_uri}
@@ -30,6 +31,7 @@ blogs:
     github_repo: {github_e2e_repo_name}
     github_app_id: {github_e2e_app_id}
     github_app_private_key: {github_e2e_app_private_key}
+    slugprefix: /blog
 """
 
 

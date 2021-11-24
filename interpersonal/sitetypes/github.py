@@ -181,7 +181,14 @@ class HugoGithubRepo(base.HugoBase):
     """
 
     def __init__(
-        self, name, uri, owner: str, repo: str, github_app_id: str, private_key_pem: str
+        self,
+        name,
+        uri,
+        slugprefix,
+        owner: str,
+        repo: str,
+        github_app_id: str,
+        private_key_pem: str,
     ):
         self.owner = owner
         self.repo = repo
@@ -189,7 +196,7 @@ class HugoGithubRepo(base.HugoBase):
         ghapp_jwt = GithubAppJwt(private_key_pem, github_app_id)
         self.ghappapi = GithubApiAppJwtAuth(ghapp_jwt)
 
-        super().__init__(name, uri)
+        super().__init__(name, uri, slugprefix)
 
     def _logged_api(self, *args, **kwargs):
         """Call self.api, logging parameters and results"""
@@ -234,17 +241,16 @@ class HugoGithubRepo(base.HugoBase):
         return content
 
     def _add_raw_post_body(self, slug: str, raw_body: str) -> str:
-        if slug.startswith("/"):
-            slug = slug[1:]
+        ppath = self._post_path(slug)
         self._logged_api(
             r"/repos/{owner}/{repo}/contents/{path}",
             "PUT",
             route=dict(
-                owner=self.owner, repo=self.repo, path=f"content/{slug}/index.md"
+                owner=self.owner, repo=self.repo, path=f"content/{ppath}/index.md"
             ),
             data={
                 "message": f"Creating post for {slug} from Interpersonal",
                 "content": base64.b64encode(raw_body.encode()).decode(),
             },
         )
-        return f"{self.baseuri}{slug}"
+        return f"{self.baseuri}{ppath}"

@@ -1,8 +1,11 @@
 """Tests for the micropub blueprint"""
 
 
+import datetime
+
 from flask.testing import FlaskClient
 
+from interpersonal.blueprints import micropub
 from tests.conftest import IndieAuthActions
 
 
@@ -30,7 +33,16 @@ def test_index_with_auth_shows_blog_list(
         assert response.status_code == 200
         assert b"List of blogs this Interpersonal instance can post to" in response.data
     except BaseException as exc:
-        print("Authenticated /micropub/ endpoint shoudl display list of blogs")
+        print("Authenticated /micropub/ endpoint should display list of blogs")
         print("Response body:")
         print(response.data.decode())
         raise exc
+
+
+def test_slugify():
+    inout = {
+        "In this essay I will - without the slightest bit of concern - grapple,": "in-this-essay-i-will-without-the-slightest-bit-of",
+        "": datetime.datetime.now().strftime("%Y%m%d-%H%M"),
+    }
+    for inp, outp in inout.items():
+        assert micropub.slugify(inp) == outp

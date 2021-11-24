@@ -101,9 +101,13 @@ class HugoBase:
           Not sure what a more general implementation would look like
     """
 
-    def __init__(self, name: str, baseuri: str):
+    def __init__(self, name: str, baseuri: str, slugprefix: str):
         self.name = name
         self.baseuri = normalize_baseuri(baseuri)
+
+        # slugprefix should never have leading or trailing / so that it's easier to work with.
+        # e.g., a slugprefix of /blog/ should be saved here as simply "blog".
+        self.slugprefix = slugprefix.strip("/")
 
     def _uri2indexmd(self, uri) -> str:
         """Map a URI to an index.md in the Hugo source.
@@ -129,6 +133,18 @@ class HugoBase:
     def add_post(self, slug: str, frontmatter: typing.Dict, content: str) -> str:
         post = HugoPostSource(frontmatter, content)
         return self._add_raw_post_body(slug, post.tostr())
+
+    def _post_path(self, slug: str) -> str:
+        """Given a slug of a post, return the full path.
+
+        Does not include an initial or trailing /
+        """
+        if slug.startswith("/"):
+            slug = slug[1:]
+        if self.slugprefix:
+            return f"{self.slugprefix}/{slug}"
+        else:
+            return f"{slug}"
 
     def _add_raw_post_body(self, slug: str, raw_body: str):
         raise NotImplementedError("Please implement this in the subclass")

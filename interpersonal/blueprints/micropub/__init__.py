@@ -152,14 +152,17 @@ def authenticate_POST(req: Request) -> VerifiedBearerToken:
     POST requetss can be authenticated by either an auth token header or an
     auth token in the submitted form.
     """
+    current_app.logger.debug(f"authenticate_POST: all headers: {req.headers}")
     form_encoded = req.headers.get("Content-type") in [
         "application/x-www-form-urlencoded",
         "multipart/form-data",
     ]
     form_auth_token = req.form.get("auth_token")
     if form_encoded and form_auth_token:
+        current_app.logger.debug(f"authenticate_POST(): Using auth_token from form...")
         verified = bearer_verify_token(form_auth_token)
     else:
+        current_app.logger.debug(f"authenticate_POST(): Using Authorization header...")
         verified = bearer_verify_token_from_auth_header(
             req.headers.get("Authorization")
         )
@@ -185,6 +188,24 @@ def process_POST_body(
     else:
         raise MicropubInvalidRequestError(f"Invalid 'Content-type': '{content_type}'")
     return (request_body, request_files)
+
+
+def slugify(text: str) -> str:
+    """Given some input text, create a URL slug
+
+    Designed to handle a title, or a full post content.
+    """
+    if not text:
+        # Return a date
+        return datetime.datetime.now().strftime("%Y%m%d-%H%M")
+    else:
+        lower = text.lower()
+        words = lower.split(" ")
+        basis = words[0:11]
+        rejoined = " ".join(basis)
+        no_non_word_chars = re.sub("[^\w ]+", "", rejoined)
+        no_spaces = re.sub(" +", "-", no_non_word_chars)
+        return no_spaces
 
 
 def new_post_from_request(request_body: typing.Dict, blog: HugoBase):
@@ -213,7 +234,7 @@ def new_post_from_request(request_body: typing.Dict, blog: HugoBase):
         else:
             frontmatter[k] = v
     if not slug:
-        raise MicropubInvalidRequestError("Missing 'slug'")
+        slug = slugify(frontmatter.get("title") or content)
     if not content:
         raise MicropubInvalidRequestError("Missing 'content'")
     if not content_type:
@@ -223,6 +244,7 @@ def new_post_from_request(request_body: typing.Dict, blog: HugoBase):
     new_post_location = blog.add_post(slug, frontmatter, content)
     resp = Response("")
     resp.headers["Location"] = new_post_location
+    resp.status_code = 201
     return resp
 
 
@@ -233,6 +255,10 @@ def micropub_blog_endpoint_POST(blog_name: str):
     Used by clients to change content (CRUD operations on posts)
     """
     blog = blog_from_blog_name(blog_name)
+
+    current_app.logger.debug(
+        f"/{blog_name}: all headers before calling authentiate_POST: {request.headers}"
+    )
     verified = authenticate_POST(request)
 
     auth_test = request.headers.get("X-Interpersonal-Auth-Test")

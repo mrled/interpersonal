@@ -47,9 +47,9 @@ class HugoExampleRepo(base.HugoBase):
     Includes a couple of example posts.
     """
 
-    def __init__(self, name, uri):
+    def __init__(self, name, uri, slugprefix):
         self.posts = _example_repo_posts
-        super().__init__(name, uri)
+        super().__init__(name, uri, slugprefix)
 
     def _get_raw_post_body(self, uri: str) -> str:
         path = re.sub(re.escape(self.baseuri), "", uri)
@@ -58,7 +58,6 @@ class HugoExampleRepo(base.HugoBase):
         return self.posts[path]
 
     def _add_raw_post_body(self, slug: str, raw_body: str) -> str:
-        if slug.startswith("/"):
-            slug = slug[1:]
-        self.posts[f"/{slug}"] = raw_body
-        return f"{self.baseuri}{slug}"
+        ppath = self._post_path(slug)
+        self.posts[f"/{ppath}"] = raw_body
+        return f"{self.baseuri}{ppath}"

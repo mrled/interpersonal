@@ -124,8 +124,8 @@ def test_e2e_github_microblog_create_post(
         z2btd = indieauthfix.zero_to_bearer_with_test_data()
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
-        slug = f"blog/test-post-{post_now.timestamp()}"
-        post_uri = f"{testconstsfix.github_e2e_blog_uri}{slug}"
+        slug = f"test-post-{post_now.timestamp()}"
+        post_uri = f"{testconstsfix.github_e2e_blog_uri}blog/{slug}"
         post_content = f"This is a test post created at {post_now} (timestamped {post_now.timestamp()})."
         post_name = f"Test post {post_now.timestamp()}"
         resp = client.post(

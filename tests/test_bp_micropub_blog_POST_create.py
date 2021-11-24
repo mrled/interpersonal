@@ -9,39 +9,6 @@ from werkzeug.datastructures import Headers
 from tests.conftest import IndieAuthActions, TestConsts
 
 
-"""
-    if action == "create":
-        frontmatter = {}
-        content = ""
-        slug = ""
-        content_type = ""
-        # TODO: add test for urlencoded body where k ends with [] to indicate an array
-        # e.g. ?tag[]=hacking&tag[]=golang should end up with both 'hacking' and 'golang' tags
-        for k, v in request_body.items():
-            if k == "h":
-                content_type = v
-            elif k == "content":
-                content = v
-            elif k == "slug":
-                slug = v
-            else:
-                frontmatter[k] = v
-            if not slug:
-                raise MicropubInvalidRequestError("Missing 'slug'")
-            if not content:
-                raise MicropubInvalidRequestError("Missing 'content'")
-            if not content_type:
-                raise MicropubInvalidRequestError("Missing 'h'")
-            if "date" not in frontmatter:
-                frontmatter["date"] = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-            blog.add_post(slug, frontmatter, content)
-
-        return json_error(500, "invalid_request", f"Action not yet handled")
-    else:
-        return json_error(500, f"Unhandled action '{action}'")
-"""
-
-
 def test_action_create_post(
     app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient
 ):
@@ -71,7 +38,7 @@ def test_action_create_post(
             raise
 
 
-def test_action_create(
+def test_action_create_with_slug(
     app: Flask,
     indieauthfix: IndieAuthActions,
     client: FlaskClient,
@@ -82,10 +49,10 @@ def test_action_create(
         z2btd = indieauthfix.zero_to_bearer_with_test_data()
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
-        slug = "blog/test-poast-1"
-        post_uri = f"{testconstsfix.blog_uri}/{slug}"
+        slug = "test-poast-1"
+        post_uri = f"{testconstsfix.blog_uri}/blog/{slug}"
         post_content = "Here I am just simply poasting a test poast"
-        resp = client.post(
+        postresp = client.post(
             "/micropub/example",
             data={
                 "auth_token": z2btd.btoken,
@@ -100,10 +67,10 @@ def test_action_create(
         )
 
         try:
-            assert resp.status_code == 200
-            assert resp.headers["Location"] == post_uri
+            assert postresp.status_code == 200
+            assert postresp.headers["Location"] == post_uri
         except BaseException:
-            print(f"Failing test. Response body: {resp.data}")
+            print(f"Failing test. Response body: {postresp.data}")
             raise
 
         # Test that it is gettable
@@ -113,14 +80,14 @@ def test_action_create(
                 "url": post_uri,
             }
         )
-        resp = client.get(
+        getresp = client.get(
             endpoint,
             headers=headers,
         )
 
         try:
-            assert resp.status_code == 200
-            json_data = json.loads(resp.data)
+            assert getresp.status_code == 200
+            json_data = json.loads(getresp.data)
             props = json_data["properties"]
             pubdate = datetime.strptime(props["published"][0], "%Y-%m-%dT%H:%M:%S")
             now = datetime.utcnow()
@@ -128,5 +95,65 @@ def test_action_create(
             retrvd_content = props["content"][0]["markdown"].strip()
             assert retrvd_content == post_content
         except BaseException:
-            print(f"Failing test. Response body: {resp.data}")
+            print(f"Failing test. Response body: {getresp.data}")
+            raise
+
+
+def test_action_create_without_slug(
+    app: Flask,
+    indieauthfix: IndieAuthActions,
+    client: FlaskClient,
+    testconstsfix: TestConsts,
+):
+    """Content-type of application/x-www-form-urlencoded should parse correctly"""
+    with app.app_context():
+        z2btd = indieauthfix.zero_to_bearer_with_test_data()
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {z2btd.btoken}"
+        post_uri = f"{testconstsfix.blog_uri}/blog/test-poast-2"
+        post_content = "Here I am just simply poasting a second test poast, and relying on automatic slug generation from the title"
+        postresp = client.post(
+            "/micropub/example",
+            data={
+                "auth_token": z2btd.btoken,
+                "action": "create",
+                "h": "entry",
+                "content": post_content,
+                "name": "tEsT pOaSt -- 2",
+                # "tags": "testing",
+                # "tags": "poasting",
+            },
+            headers=headers,
+        )
+
+        try:
+            assert postresp.status_code == 200
+            assert postresp.headers["Location"] == post_uri
+        except BaseException:
+            print(f"Failing test. Response body: {postresp.data}")
+            raise
+
+        # Test that it is gettable
+        endpoint = "/micropub/example?" + urlencode(
+            {
+                "q": "source",
+                "url": post_uri,
+            }
+        )
+        getresp = client.get(
+            endpoint,
+            headers=headers,
+        )
+
+        try:
+            assert getresp.status_code == 200
+            json_data = json.loads(getresp.data)
+            props = json_data["properties"]
+            pubdate = datetime.strptime(props["published"][0], "%Y-%m-%dT%H:%M:%S")
+            now = datetime.utcnow()
+            assert pubdate.strftime("%Y-%m-%d") == now.strftime("%Y-%m-%d")
+            retrvd_content = props["content"][0]["markdown"].strip()
+            assert retrvd_content == post_content
+        except BaseException:
+            print(f"Failing test. Response body: {getresp.data}")
             raise

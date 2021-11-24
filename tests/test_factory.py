@@ -27,6 +27,7 @@ def test_config():
         - name: example
           type: built-in example
           uri: http://whatever.example.net
+          slugprefix: /blog
         """
     )
 
