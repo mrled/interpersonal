@@ -20,7 +20,6 @@ from flask import (
 )
 from flask.wrappers import Response
 
-from interpersonal import util
 from interpersonal.blueprints.indieauth import (
     ALL_HTTP_METHODS,
     VerifiedBearerToken,
@@ -36,13 +35,12 @@ from interpersonal.errors import (
     MissingBearerAuthHeaderError,
     MissingBearerTokenError,
     InvalidBearerTokenError,
-    render_error,
     json_error,
 )
 from interpersonal.sitetypes.base import HugoBase
 
 
-bp = Blueprint("micropub", __name__, url_prefix="/micropub")
+bp = Blueprint("micropub", __name__, url_prefix="/micropub", template_folder="temple")
 
 for err in [
     MicropubBlogNotFoundError,
@@ -71,7 +69,7 @@ def index():
     Show a list of configured blogs
     """
     blogs = current_app.config["APPCONFIG"].blogs
-    return render_template("micropub/index.html.j2", blogs=blogs)
+    return render_template("micropub.index.html.j2", blogs=blogs)
 
 
 def bearer_verify_token_from_auth_header(auth_header: str):
@@ -311,7 +309,7 @@ def micropub_authorized():
     blogs = current_app.config["APPCONFIG"].blogs
 
     return render_template(
-        "micropub/authorized.html.j2",
+        "micropub.authorized.html.j2",
         installed_to="GitHub",
         code=code,
         installation_id=installation_id,

@@ -5,12 +5,12 @@ from flask import (
 )
 
 
-bp = Blueprint("root", __name__)
+bp = Blueprint("root", __name__, template_folder="temple")
 
 
 @bp.route("/")
 def index():
-    return render_template("index.html.j2")
+    return render_template("root.index.html.j2")
 
 
 @bp.route("/hello")

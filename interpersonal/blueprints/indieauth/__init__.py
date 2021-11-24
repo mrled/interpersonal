@@ -29,7 +29,7 @@ from interpersonal.errors import (
     render_error,
 )
 
-bp = Blueprint("indieauth", __name__, url_prefix="/indieauth")
+bp = Blueprint("indieauth", __name__, url_prefix="/indieauth", template_folder="temple")
 
 bp.register_error_handler(InvalidBearerTokenError, InvalidBearerTokenError.handler)
 
@@ -61,7 +61,7 @@ ALL_HTTP_METHODS = [
 
 @bp.route("/")
 def index():
-    return render_template("indieauth/index.html.j2")
+    return render_template("indieauth.index.html.j2")
 
 
 @bp.route("/login", methods=("GET", "POST"))
@@ -86,7 +86,7 @@ def login():
 
         flash(error)
 
-    return render_template("indieauth/login.html.j2")
+    return render_template("indieauth.login.html.j2")
 
 
 @bp.before_app_request
@@ -180,7 +180,7 @@ def authorize_GET(
         return render_error(400, f"redirect_uri must be on the same host as client_id")
 
     return render_template(
-        "indieauth/authorize.html.j2",
+        "indieauth.authorize.html.j2",
         scope_info=SCOPE_INFO,
         response_type=response_type,
         client_id=client_id,
