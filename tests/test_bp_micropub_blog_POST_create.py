@@ -67,7 +67,7 @@ def test_action_create_with_slug(
         )
 
         try:
-            assert postresp.status_code == 200
+            assert postresp.status_code == 201
             assert postresp.headers["Location"] == post_uri
         except BaseException:
             print(f"Failing test. Response body: {postresp.data}")
@@ -127,7 +127,7 @@ def test_action_create_without_slug(
         )
 
         try:
-            assert postresp.status_code == 200
+            assert postresp.status_code == 201
             assert postresp.headers["Location"] == post_uri
         except BaseException:
             print(f"Failing test. Response body: {postresp.data}")
