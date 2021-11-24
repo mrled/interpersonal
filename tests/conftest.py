@@ -28,7 +28,8 @@ blogs:
     uri: {github_e2e_blog_uri}
     github_owner: {github_e2e_repo_owner}
     github_repo: {github_e2e_repo_name}
-    github_token: {github_e2e_personal_token}
+    github_app_id: {github_e2e_app_id}
+    github_app_private_key: {github_e2e_app_private_key}
 """
 
 
@@ -43,7 +44,10 @@ class TestConsts:
     github_e2e_blog_uri = os.environ.get("INTERPERSONAL_TEST_GITHUB_BLOG_URI")
     github_e2e_repo_owner = os.environ.get("INTERPERSONAL_TEST_GITHUB_OWNER")
     github_e2e_repo_name = os.environ.get("INTERPERSONAL_TEST_GITHUB_REPO")
-    github_e2e_personal_token = os.environ.get("INTERPERSONAL_TEST_GITHUB_TOKEN")
+    github_e2e_app_id = os.environ.get("INTERPERSONAL_TEST_GITHUB_APP_ID")
+    github_e2e_app_private_key = os.environ.get(
+        "INTERPERSONAL_TEST_GITHUB_APP_PRIVATE_KEY"
+    )
 
 
 @pytest.fixture
@@ -66,7 +70,8 @@ def app():
         github_e2e_blog_uri=TestConsts.github_e2e_blog_uri,
         github_e2e_repo_owner=TestConsts.github_e2e_repo_owner,
         github_e2e_repo_name=TestConsts.github_e2e_repo_name,
-        github_e2e_personal_token=TestConsts.github_e2e_personal_token,
+        github_e2e_app_id=TestConsts.github_e2e_app_id,
+        github_e2e_app_private_key=TestConsts.github_e2e_app_private_key,
     )
     os.write(conf_fd, appconfig_str.encode())
 

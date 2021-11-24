@@ -289,3 +289,31 @@ def micropub_blog_endpoint_POST(blog_name: str):
 def micropub_blog_media(blog_name):
     """The per-blog media endpoint"""
     raise NotImplementedError
+
+
+@bp.route("/authorized/github")
+def micropub_authorized():
+    """Redirection destination when installing an oauth app on a third party service
+
+    E.g. when installing Interpersonal as a Github app,
+    you should be redirected here when the app is successfully installed.
+
+    See /docs/github-app.md for more examples.
+
+    If more site types are added, code here may need to change.
+    E.g. if we started to support Gitlab site types.
+    """
+
+    code = request.form.get("code")
+    installation_id = request.form.get("installation_id")
+    setup_action = request.form.get("setup_action")
+
+    blogs = current_app.config["APPCONFIG"].blogs
+
+    return render_template(
+        "micropub/authorized.html.j2",
+        installed_to="GitHub",
+        code=code,
+        installation_id=installation_id,
+        setup_action=setup_action,
+    )

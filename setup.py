@@ -6,7 +6,7 @@ with open("readme.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="interpersonal",
-    version="0.0.1",
+    version="0.0.2",
     author="Micah R Ledbetter",
     author_email="me@micahrl.com",
     description="The connection between my little site and the Indie Web.",
@@ -21,7 +21,8 @@ setuptools.setup(
         "coverage",
         "cryptography",
         "flask",
-        "ghapi",
+        "ghapi @ git+https://github.com/fastai/ghapi.git@d8fb5c2#egg=ghapi",
+        "pyjwt[crypto]",
         "pytest",
         "pyyaml",
         "requests",

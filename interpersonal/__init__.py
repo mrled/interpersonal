@@ -43,10 +43,8 @@ def create_app(
 
     try:
         appconfig = AppConfig.fromyaml(configpath)
-    except:
-        raise Exception(
-            "INTERPERSONAL_CONFIG environment variable must point to a valid configuration file"
-        )
+    except BaseException as exc:
+        raise Exception(f"Error loading interpersonal configuration file: {exc}")
 
     app = Flask(__name__, instance_relative_config=True)
 

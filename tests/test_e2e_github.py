@@ -9,6 +9,7 @@ See readme for details.
 
 import json
 import os
+import time
 from datetime import datetime
 from urllib.parse import urlencode
 
@@ -17,6 +18,7 @@ from flask.app import Flask
 from flask.testing import FlaskClient
 from werkzeug.datastructures import Headers
 
+from interpersonal.sitetypes import github
 from tests.conftest import IndieAuthActions, TestConsts
 
 
@@ -24,6 +26,54 @@ pytestmark = pytest.mark.skipif(
     not os.environ.get("INTERPERSONAL_TEST_GITHUB_RUN_E2E_TESTS"),
     reason="Do not run tests against real Github repos by default",
 )
+
+
+def test_e2e_github_GithubApiAppJwtAuth_app_installations(
+    testconstsfix: TestConsts,
+):
+    """Test that the list of installations contains the test install.
+
+    The Github app must be created and installed for this test to pass.
+    When it is installed, it must have access rights to the test repo.
+    """
+    ghjwt = github.GithubAppJwt(
+        testconstsfix.github_e2e_app_private_key, testconstsfix.github_e2e_app_id
+    )
+    ghappapi = github.GithubApiAppJwtAuth(ghjwt)
+    result = ghappapi.app_installations()
+    rowner = testconstsfix.github_e2e_repo_owner
+    installs = [i for i in result if i["account"]["login"] == rowner]
+    assert len(installs) == 1
+    install = installs[0]
+    assert install["permissions"]["contents"] == "write"
+
+
+def test_e2e_github_GithubApiAppJwtAuth_install_token(
+    testconstsfix: TestConsts,
+):
+    """Test that we can find our install token.
+
+    The Github app must be created and installed for this test to pass.
+    When it is installed, it must have access rights to the test repo.
+    """
+    ghjwt = github.GithubAppJwt(
+        testconstsfix.github_e2e_app_private_key, testconstsfix.github_e2e_app_id
+    )
+    ghappapi = github.GithubApiAppJwtAuth(ghjwt)
+    rowner = testconstsfix.github_e2e_repo_owner
+    result = ghappapi.install_token(rowner)
+    print(f"Got resulting token: {result}")
+    assert "token" in result
+    assert "expires_at" in result
+    assert result["permissions"]["contents"] == "write"
+
+    print("Sleeping for 2 secs and then trying again to test the cache")
+    time.sleep(2)
+
+    result2 = ghappapi.install_token(rowner)
+    print(f"Got resulting token: {result2}")
+    assert result["token"] == result2["token"]
+    assert result["expires_at"] == result2["expires_at"]
 
 
 def test_e2e_github_microblog_get_post(

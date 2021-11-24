@@ -1,0 +1,9 @@
+{
+    "token": "ghs_************REDACTED************",
+    "expires_at": "2021-11-22T18:32:43Z",
+    "permissions": {
+      "contents": "write",
+      "metadata": "read"
+    },
+    "repository_selection": "selected"
+  }

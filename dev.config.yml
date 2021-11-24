@@ -14,4 +14,11 @@ blogs:
   #   uri: https://interpersonal-test-blog.netlify.app/
   #   github_owner: mrled
   #   github_repo: interpersonal-test-blog
-  #   github_token: <your github personal token here>
+  #   github_app_id: 1234567890
+  #   github_app_private_key: |+
+  #     -----BEGIN RSA PRIVATE KEY-----
+  #     qwertyuiopasdfghjkl........ very long value here
+  #     You can paste the entire thing here (just make sure its indented like this).
+  #     Alternatively you can just set this value to a path to the key.
+  #     -----END RSA PRIVATE KEY-----
+

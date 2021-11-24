@@ -39,7 +39,8 @@ class AppConfig:
                     yamlblog["uri"],
                     yamlblog["github_owner"],
                     yamlblog["github_repo"],
-                    yamlblog["github_token"],
+                    yamlblog["github_app_id"],
+                    yamlblog["github_app_private_key"],
                 )
             else:
                 raise Exception(f"Unknown blog type {yamlblog['type']}")

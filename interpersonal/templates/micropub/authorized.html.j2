@@ -1,0 +1,16 @@
+{% extends "_base.html.j2" %}
+
+{% block header %}
+  <h1>{% block title %}App installed{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+  <div>
+    <p>Interpersonal has been successfully installed as a {{ installed_to }} app.</p>
+    <ul>
+      <li>Code: {{ code }}</li>
+      <li>Installation ID: {{ installation_id }}</li>
+      <li>Setup action: {{ setup_action }}</li>
+    </ul>
+  </div>
+{% endblock %}

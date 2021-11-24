@@ -1,0 +1,45 @@
+[
+    {
+      "id": 20836900,
+      "account": {
+        "login": "mrled",
+        "id": 129654,
+        "node_id": "MDQ6VXNlcjEyOTY1NA==",
+        "avatar_url": "https://avatars.githubusercontent.com/u/129654?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/mrled",
+        "html_url": "https://github.com/mrled",
+        "followers_url": "https://api.github.com/users/mrled/followers",
+        "following_url": "https://api.github.com/users/mrled/following{/other_user}",
+        "gists_url": "https://api.github.com/users/mrled/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/mrled/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/mrled/subscriptions",
+        "organizations_url": "https://api.github.com/users/mrled/orgs",
+        "repos_url": "https://api.github.com/users/mrled/repos",
+        "events_url": "https://api.github.com/users/mrled/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/mrled/received_events",
+        "type": "User",
+        "site_admin": false
+      },
+      "repository_selection": "selected",
+      "access_tokens_url": "https://api.github.com/app/installations/20836900/access_tokens",
+      "repositories_url": "https://api.github.com/installation/repositories",
+      "html_url": "https://github.com/settings/installations/20836900",
+      "app_id": 153329,
+      "app_slug": "interpersonal-micahrl-com",
+      "target_id": 129654,
+      "target_type": "User",
+      "permissions": {
+        "contents": "write",
+        "metadata": "read"
+      },
+      "events": [],
+      "created_at": "2021-11-21T04:25:17.000Z",
+      "updated_at": "2021-11-21T04:25:18.000Z",
+      "single_file_name": null,
+      "has_multiple_single_files": false,
+      "single_file_paths": [],
+      "suspended_by": null,
+      "suspended_at": null
+    }
+  ]
