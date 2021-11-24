@@ -24,14 +24,25 @@ from flask import (
 )
 
 from interpersonal import database, util
+
+#### WARNING!!! Make sure to register the error handler on each of these!
 from interpersonal.errors import (
+    IndieauthCodeVerifierMismatchError,
+    IndieauthInvalidGrantError,
+    InvalidAuthCodeError,
     InvalidBearerTokenError,
     render_error,
 )
 
 bp = Blueprint("indieauth", __name__, url_prefix="/indieauth", template_folder="temple")
 
-bp.register_error_handler(InvalidBearerTokenError, InvalidBearerTokenError.handler)
+for err in [
+    IndieauthCodeVerifierMismatchError,
+    IndieauthInvalidGrantError,
+    InvalidAuthCodeError,
+    InvalidBearerTokenError,
+]:
+    bp.register_error_handler(err, err.handler)
 
 
 # These are mostly not used yet... I'd like to implement micropub at some point soon though
@@ -364,7 +375,7 @@ def redeem_auth_code(
         (authorization_code,),
     ).fetchone()
     if not row:
-        return render_error(400, f"Invalid auth code '{authorization_code}'")
+        raise InvalidAuthCodeError(authorization_code)
 
     if (
         datetime.datetime.utcnow() - row["time"] > datetime.timedelta(minutes=5)
@@ -373,7 +384,7 @@ def redeem_auth_code(
         or row["used"]
         or row["host"] != origin_host
     ):
-        return render_error(400, "Invalid grant")
+        raise IndieauthInvalidGrantError
 
     if row["codeChallengeMethod"] == "S256":
         if not code_verifier:
@@ -388,7 +399,7 @@ def redeem_auth_code(
             hashlib.sha256(code_verifier.encode()).digest(),
             decoded_code_challenge,
         ):
-            return render_error(400, "Invalid grant: code_verified didn't match")
+            raise IndieauthCodeVerifierMismatchError
 
     db.execute(
         "UPDATE AuthorizationCode SET used = 1 WHERE authorizationCode = ?",
@@ -455,7 +466,6 @@ def bearer_GET():
 
 
 @bp.route("/bearer", methods=["POST"])
-@indieauth_required(ALL_HTTP_METHODS)
 def bearer_POST():
     """Handle a POST request for the bearer endpoint.
 
@@ -484,13 +494,17 @@ def bearer_POST():
 
     # If an action is not specified, assume "create"
 
-    code_row = redeem_auth_code(
-        request.form["code"],
-        request.form["client_id"],
-        request.form["redirect_uri"],
-        request.headers["host"],
-        request.form.get("code_verifier"),
-    )
+    ## TODO: make sure the 'me' property is one we actually authorize for
+
+    try:
+        code = request.form["code"]
+        client_id = request.form["client_id"]
+        redirect_uri = request.form["redirect_uri"]
+        host = request.headers["host"]
+        code_verifier = request.form.get("code_verifier")
+    except KeyError as exc:
+        return render_error(400, f"Missing required form field '{exc.args[0]}'")
+    code_row = redeem_auth_code(code, client_id, redirect_uri, host, code_verifier)
 
     bearer_token = secrets.token_urlsafe(16)
 
@@ -508,7 +522,7 @@ def bearer_POST():
     db.commit()
 
     response = {
-        "me": current_app.config["APPCONFIG"].owner_profile,
+        "me": request.form["me"],
         "token_type": "bearer",
         "access_token": bearer_token,
         "scope": code_row["scopes"],

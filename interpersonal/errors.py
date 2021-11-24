@@ -21,6 +21,27 @@ def render_error(errcode: int, errmsg: str):
     )
 
 
+class InvalidAuthCodeError(Exception):
+    def __init__(self, code):
+        self.code = code
+
+    @staticmethod
+    def handler(exc):
+        return render_error(401, f"Invalid auth code '{exc.code}'")
+
+
+class IndieauthInvalidGrantError(Exception):
+    @staticmethod
+    def handler(exc):
+        return render_error(400, f"Invalid grant")
+
+
+class IndieauthCodeVerifierMismatchError(Exception):
+    @staticmethod
+    def handler(exc):
+        return render_error(400, "Invalid grant: code_verified didn't match")
+
+
 class InvalidBearerTokenError(Exception):
     def __init__(self, token):
         self.token = token

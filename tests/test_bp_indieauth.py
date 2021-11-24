@@ -353,21 +353,36 @@ def test_bearer_verify_token(
                 in invalid_verify_result.data
             )
 
-        # TODO: verify bad tokens fail
-
 
 def test_bearer_POST_requires_auth(client: FlaskClient):
-    response_POST = client.post(
+    resp1 = client.post(
         "/indieauth/bearer", data={"example": "data", "for": "thistest"}
     )
-
     try:
-        assert response_POST.status_code == 302
-        assert b'<a href="/indieauth/login' in response_POST.data
+        assert resp1.status_code == 400
+        assert b"Missing required form field 'code'" in resp1.data
     except BaseException as exc:
         print("Failed GET tests!")
         print("Response body:")
-        print(response_POST.data.decode())
+        print(resp1.data.decode())
+        raise exc
+
+    resp2 = client.post(
+        "/indieauth/bearer",
+        data={
+            "code": "a very invalid one",
+            "client_id": "invalidcid",
+            "redirect_uri": "https://example.com",
+            "host": "whatever",
+        },
+    )
+    try:
+        assert resp2.status_code == 401
+        assert b"Invalid auth code 'a very invalid one'" in resp2.data
+    except BaseException as exc:
+        print("Failed GET tests!")
+        print("Response body:")
+        print(resp2.data.decode())
         raise exc
 
 
@@ -384,6 +399,9 @@ def test_bearer_POST(indieauthfix: IndieAuthActions, testconstsfix: TestConsts):
     authorization_code = indieauthfix.authorization_code_from_grant_response(
         grant_response, redir_uri
     )
+
+    # Log out to make sure we aren't confusing indieauth authentication with bearer authentication
+    indieauthfix.logout()
 
     ## POST that auth code to the bearer endpoint, exchanging it for an access token
     response = indieauthfix.bearer(authorization_code, client_id, redir_uri)

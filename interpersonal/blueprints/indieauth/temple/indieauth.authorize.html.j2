@@ -34,6 +34,8 @@
         <p>Security warning: the client did not use PKCE S256 for this request.</p>
       {% endif %}
 
+      <p>Clicking "Submit" will take you to {{ url_for('indieauth.grant') }}</p>
+
       <button type="submit">Ok</button><br><br>
     </form>
   </main>
