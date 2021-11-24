@@ -142,6 +142,10 @@ Finally, configure Apache to call the WSGI file:
 <VirtualHost *>
     ServerName example.com
 
+    # Without this line, Apache will strip the Authorization header
+    # before handing the request to your app.
+    WSGIPassAuthorization On
+
     WSGIDaemonProcess interpersonal user=user1 group=group1 threads=5 \
         python-home=/path/to/interpersonal.venv
     WSGIScriptAlias / /var/www/interpersonal/interpersonal.wsgi.py
