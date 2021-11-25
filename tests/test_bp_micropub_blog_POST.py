@@ -17,7 +17,7 @@ def test_micropub_blog_endpoint_POST_unauth_fails(
     with app.app_context():
         # Log in and get a bearer token, but don't use it
         z2btd = indieauthfix.zero_to_bearer_with_test_data()
-        unauth_response = client.post("/micropub/example")
+        unauth_response = client.post("/micropub/example-blog")
         assert unauth_response.status_code == 401
         unauth_response_json = json.loads(unauth_response.data)
         assert unauth_response_json["error"] == "unauthorized"
@@ -38,7 +38,7 @@ def test_auth_in_header(
         authheaders = Headers()
         authheaders["Authorization"] = f"Bearer {z2btd.btoken}"
         authheaders["X-Interpersonal-Auth-Test"] = "yes"
-        auth_response = client.post("/micropub/example", headers=authheaders)
+        auth_response = client.post("/micropub/example-blog", headers=authheaders)
 
         assert auth_response.status_code == 200
         auth_response_json = json.loads(auth_response.data)
@@ -61,7 +61,7 @@ def test_auth_in_form(app: Flask, indieauthfix: IndieAuthActions, client: FlaskC
         # to x-www-form-urlencoded
         # headers["Content-type"] = "application/x-www-form-urlencoded"
         auth_response = client.post(
-            "/micropub/example", data={"auth_token": z2btd.btoken}, headers=headers
+            "/micropub/example-blog", data={"auth_token": z2btd.btoken}, headers=headers
         )
 
         assert auth_response.status_code == 200
@@ -79,7 +79,7 @@ def test_missing_content_type_fails(
         z2btd = indieauthfix.zero_to_bearer_with_test_data()
         authheaders = Headers()
         authheaders["Authorization"] = f"Bearer {z2btd.btoken}"
-        resp = client.post("/micropub/example", headers=authheaders)
+        resp = client.post("/micropub/example-blog", headers=authheaders)
 
         assert resp.status_code == 400
         respjson = json.loads(resp.data)
@@ -99,7 +99,7 @@ def test_content_type_app_json(
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
         # Passing a dict to data= will set Content-type to application/x-www-form-urlencoded
         resp = client.post(
-            "/micropub/example",
+            "/micropub/example-blog",
             json={
                 "auth_token": z2btd.btoken,
                 "interpersonal_content-type_test": contype_test_value,
@@ -130,7 +130,7 @@ def test_content_type_urlencoded_form(
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
         # Passing a dict to data= will set Content-type to application/x-www-form-urlencoded
         resp = client.post(
-            "/micropub/example",
+            "/micropub/example-blog",
             data={
                 "auth_token": z2btd.btoken,
                 "interpersonal_content-type_test": contype_test_value,
@@ -168,7 +168,7 @@ def test_content_type_multipart_form(
         # Passing a dict to data= will set Content-type to application/x-www-form-urlencoded
         # If the dict has a "file" key, it will be sent as multipart/form-data
         resp = client.post(
-            "/micropub/example",
+            "/micropub/example-blog",
             data={
                 "auth_token": z2btd.btoken,
                 "interpersonal_content-type_test": contype_test_value,
@@ -198,7 +198,7 @@ def test_action_delete(app: Flask, indieauthfix: IndieAuthActions, client: Flask
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
         resp = client.post(
-            "/micropub/example",
+            "/micropub/example-blog",
             data={
                 "auth_token": z2btd.btoken,
                 "action": "delete",
@@ -227,7 +227,7 @@ def test_action_undelete(
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
         resp = client.post(
-            "/micropub/example",
+            "/micropub/example-blog",
             data={
                 "auth_token": z2btd.btoken,
                 "action": "undelete",
@@ -254,7 +254,7 @@ def test_action_modify(app: Flask, indieauthfix: IndieAuthActions, client: Flask
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
         resp = client.post(
-            "/micropub/example",
+            "/micropub/example-blog",
             data={
                 "auth_token": z2btd.btoken,
                 "action": "update",
@@ -283,7 +283,7 @@ def test_action_invalid(
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
         resp = client.post(
-            "/micropub/example",
+            "/micropub/example-blog",
             data={
                 "auth_token": z2btd.btoken,
                 "action": "invalid",
@@ -313,7 +313,7 @@ def test_scope_invalid(app: Flask, indieauthfix: IndieAuthActions, client: Flask
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
         resp = client.post(
-            "/micropub/example",
+            "/micropub/example-blog",
             data={
                 "auth_token": z2btd.btoken,
                 "action": "delete",

@@ -28,7 +28,6 @@ from interpersonal.blueprints.indieauth.util import (
 from interpersonal.consts import ALL_HTTP_METHODS
 
 from interpersonal.errors import (
-    MicropubBlogNotFoundError,
     MicropubInsufficientScopeError,
     MicropubInvalidRequestError,
     MissingBearerAuthHeaderError,
@@ -45,14 +44,6 @@ bp = Blueprint("micropub", __name__, url_prefix="/micropub", template_folder="te
 bp.register_error_handler(Exception, catchall_error_handler)
 
 
-def blog_from_blog_name(blog_name: str) -> HugoBase:
-    """Given a blog name, find a configured blog in the list"""
-    try:
-        return current_app.config["APPCONFIG"].blog(blog_name)
-    except KeyError:
-        raise MicropubBlogNotFoundError(blog_name)
-
-
 @bp.route("/")
 @indieauth_required(ALL_HTTP_METHODS)
 def index():
@@ -64,7 +55,7 @@ def index():
     return render_template("micropub.index.html.j2", blogs=blogs)
 
 
-def bearer_verify_token_from_auth_header(auth_header: str):
+def bearer_verify_token_from_auth_header(auth_header: str, me: str):
     """Given an Authorization header, verify the token.
 
     Return a VerifiedBearerToken.
@@ -78,7 +69,7 @@ def bearer_verify_token_from_auth_header(auth_header: str):
     if not token:
         raise MissingBearerTokenError()
 
-    verified = bearer_verify_token(token)
+    verified = bearer_verify_token(token, me)
     current_app.logger.debug(
         f"Successfully verified token {token} for owner {verified['me']} using client {verified['client_id']} authorized for scope {verified['scopes']}"
     )
@@ -95,10 +86,10 @@ def micropub_blog_endpoint_GET(blog_name: str):
       (syndication targets currently not supported)
     * Retrieve metadata for a given URL, such as published date and tags, in microformats2-json format
     """
-    blog = blog_from_blog_name(blog_name)
+    blog = current_app.config["APPCONFIG"].blog(blog_name)
 
     verified = bearer_verify_token_from_auth_header(
-        request.headers.get("Authorization")
+        request.headers.get("Authorization"), blog.baseuri
     )
 
     q = request.args.get("q")
@@ -138,7 +129,7 @@ def micropub_blog_endpoint_GET(blog_name: str):
         )
 
 
-def authenticate_POST(req: Request) -> VerifiedBearerToken:
+def authenticate_POST(req: Request, blog: HugoBase) -> VerifiedBearerToken:
     """Authenticate a POST request
 
     POST requetss can be authenticated by either an auth token header or an
@@ -152,11 +143,11 @@ def authenticate_POST(req: Request) -> VerifiedBearerToken:
     form_auth_token = req.form.get("auth_token")
     if form_encoded and form_auth_token:
         current_app.logger.debug(f"authenticate_POST(): Using auth_token from form...")
-        verified = bearer_verify_token(form_auth_token)
+        verified = bearer_verify_token(form_auth_token, blog.baseuri)
     else:
         current_app.logger.debug(f"authenticate_POST(): Using Authorization header...")
         verified = bearer_verify_token_from_auth_header(
-            req.headers.get("Authorization")
+            req.headers.get("Authorization"), blog.baseuri
         )
     return verified
 
@@ -246,12 +237,12 @@ def micropub_blog_endpoint_POST(blog_name: str):
 
     Used by clients to change content (CRUD operations on posts)
     """
-    blog = blog_from_blog_name(blog_name)
+    blog = current_app.config["APPCONFIG"].blog(blog_name)
 
     current_app.logger.debug(
         f"/{blog_name}: all headers before calling authentiate_POST: {request.headers}"
     )
-    verified = authenticate_POST(request)
+    verified = authenticate_POST(request, blog)
 
     auth_test = request.headers.get("X-Interpersonal-Auth-Test")
     # Check for the header we use in testing, and return a success message

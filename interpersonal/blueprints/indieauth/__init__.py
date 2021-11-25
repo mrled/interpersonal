@@ -4,7 +4,6 @@ import hashlib
 import re
 import secrets
 import sqlite3
-import typing
 from urllib.parse import unquote
 
 import rfc3986
@@ -27,7 +26,10 @@ from interpersonal.consts import (
     ALL_HTTP_METHODS,
     SCOPE_INFO,
 )
-from interpersonal.blueprints.indieauth.util import indieauth_required
+from interpersonal.blueprints.indieauth.util import (
+    bearer_verify_token,
+    indieauth_required,
+)
 from interpersonal.util import uri_copy_and_append_query
 
 from interpersonal.errors import (
@@ -96,9 +98,9 @@ def logout():
     return redirect(url_for("indieauth.index"))
 
 
-@bp.route("/authorize", methods=["GET"])
+@bp.route("/authorize/<blog_name>", methods=["GET"])
 @indieauth_required(["GET"])
-def authorize_GET():
+def authorize_GET(blog_name: str):
     """The GET handler for the IndieAuth authorization endpoint
 
     <https://indieauth.spec.indieweb.org/#authorization-request>
@@ -112,6 +114,8 @@ def authorize_GET():
     scope - (optional) A space-separated list of scopes the client is requesting, e.g. "profile", or "profile create". If the client omits this value, the authorization server MUST NOT issue an access token for this authorization code. Only the user's profile URL may be returned without any scope requested. See Profile Information for details about which scopes to request to return user profile information.
     me - (optional) The URL that the user entered
     """
+
+    blog = current_app.config["APPCONFIG"].blog(blog_name)
 
     client_id = request.args.get("client_id")
     redirect_uri = request.args.get("redirect_uri")
@@ -162,11 +166,12 @@ def authorize_GET():
         code_challenge_method=code_challenge_method,
         requested_scope_list=scope.split(),
         me=me,
+        blog_name=blog_name,
     )
 
 
-@bp.route("/authorize", methods=["POST"])
-def authorize_POST():
+@bp.route("/authorize/<blog_name>", methods=["POST"])
+def authorize_POST(blog_name: str):
     """The POST verb for the IndieAuth authorization endpoint
 
     Note that the GET method requires authorization,
@@ -182,6 +187,8 @@ def authorize_POST():
     client_id - The client URL
     redirect_uri - The redirect URL indicating where the user should be redirected to after approving the request
     """
+    blog = current_app.config["APPCONFIG"].blog(blog_name)
+
     authorization_code = request.form["code"]
     origin_host = request.headers["Host"]
     client_id = request.form["client_id"]
@@ -199,14 +206,14 @@ def authorize_POST():
             "redirect_uri": redirect_uri,
             "code_challenge": code_challenge,
             "code_challenge_method": code_challenge_method,
-            "me": current_app.config["APPCONFIG"].owner_profile,
+            "me": blog.baseuri,
         }
     )
 
 
-@bp.route("/grant", methods=["POST"])
+@bp.route("/grant/<blog_name>", methods=["POST"])
 @indieauth_required(ALL_HTTP_METHODS)
-def grant():
+def grant(blog_name: str):
     """Grant permission to another site with IndieAuth
 
     Once the user authenticates and allows access to the app,
@@ -216,6 +223,8 @@ def grant():
     """
     if request.headers.get("sec-fetch-site", "same-origin") != "same-origin":
         return render_error(401, "Request must be same origin")
+
+    blog = current_app.config["APPCONFIG"].blog(blog_name)
 
     client_id = unquote(request.form.get("client_id"))
     redirect_uri = unquote(request.form.get("redirect_uri"))
@@ -336,55 +345,23 @@ def redeem_auth_code(
     return finalrow
 
 
-class VerifiedBearerToken(typing.TypedDict):
-    me: str
-    client_id: str
-    scopes: typing.List[str]
-
-
-def bearer_verify_token(token: str) -> VerifiedBearerToken:
-    """Verify a bearer token"""
-    db = database.get_db()
-    row = db.execute(
-        """
-            SELECT
-                bearerToken,
-                clientId,
-                scopes
-            FROM
-                BearerToken
-            WHERE
-                bearerToken = ?;
-        """,
-        (token,),
-    ).fetchone()
-    if not row:
-        raise InvalidBearerTokenError(token)
-    current_app.logger.debug(f"Found valid bearer token: {row}")
-
-    return {
-        "me": current_app.config["APPCONFIG"].owner_profile,
-        "client_id": row["clientId"],
-        "scopes": row["scopes"].split(" "),
-    }
-
-
-@bp.route("/bearer", methods=["GET"])
+@bp.route("/bearer/<blog_name>", methods=["GET"])
 @indieauth_required(["GET"])
-def bearer_GET():
+def bearer_GET(blog_name: str):
     """Handle a GET request for the bearer endpoint
 
     GET requests are used to verify a token that the client has.
 
     <https://indieweb.org/token-endpoint#Verifying_an_Access_Token>
     """
+    blog = current_app.config["APPCONFIG"].blog(blog_name)
     authh = request.headers["Authorization"]
     token = re.sub("^Bearer ", "", authh)
-    return jsonify(bearer_verify_token(token))
+    return jsonify(bearer_verify_token(token, blog.baseuri))
 
 
-@bp.route("/bearer", methods=["POST"])
-def bearer_POST():
+@bp.route("/bearer/<blog_name>", methods=["POST"])
+def bearer_POST(blog_name: str):
     """Handle a POST request for the bearer endpoint.
 
     After the user authorizes the client via the authorization endpoint,
@@ -394,6 +371,8 @@ def bearer_POST():
 
     <https://indieweb.org/token-endpoint#Granting_an_Access_Token>
     """
+
+    blog = current_app.config["APPCONFIG"].blog(blog_name)
 
     current_app.logger.debug(f"bearer_POST(): request.form: {request.form}")
 
@@ -443,7 +422,7 @@ def bearer_POST():
     db.commit()
 
     response = {
-        "me": request.form["me"],
+        "me": blog.baseuri,
         "token_type": "bearer",
         "access_token": bearer_token,
         "scope": code_row["scopes"],

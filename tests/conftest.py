@@ -17,10 +17,9 @@ TEST_APPCONFIG_YAML_TEMPLATE = """
 loglevel: DEBUG
 database: {db_path}
 password: {password}
-owner_profile: {owner_profile}
 cookie_secret_key: {cookie_secret_key}
 blogs:
-  - name: example
+  - name: example-blog
     type: built-in example
     uri: {baseuri}
     slugprefix: /blog
@@ -38,9 +37,8 @@ blogs:
 class TestConsts:
     login_password = "test-login-password-123X"
     cookie_secret_key = "test-cookie-secret-key-ASDF-1234"
-    owner_profile = "https://interpersonal.example.org/"
     sql_data = TEST_SQL_DATA
-    blog_uri = "http://interpersonal.example.org"
+    blog_uri = "https://interpersonal.example.org/"
 
     github_e2e_blog_name = "interpersonal-test-blog"
     github_e2e_blog_uri = os.environ.get("INTERPERSONAL_TEST_GITHUB_BLOG_URI")
@@ -65,7 +63,6 @@ def app():
     appconfig_str = TEST_APPCONFIG_YAML_TEMPLATE.format(
         db_path=db_path,
         password=TestConsts.login_password,
-        owner_profile=TestConsts.owner_profile,
         cookie_secret_key=TestConsts.cookie_secret_key,
         baseuri=TestConsts.blog_uri,
         github_e2e_blog_name=TestConsts.github_e2e_blog_name,
@@ -134,11 +131,11 @@ class IndieAuthActions(object):
             "state": state,
             "code_challenge": None,
             "code_challenge_method": None,
-            "me": TestConsts.owner_profile,
+            "me": TestConsts.blog_uri,
         }
         for scope in scopes:
             data[f"scope:{scope}"] = "on"
-        return self._client.post("/indieauth/grant", data=data)
+        return self._client.post("/indieauth/grant/example-blog", data=data)
 
     def authorization_code_from_grant_response(self, grant_response, redirect_uri):
         """Parse the authorization code out from the the response to /indieauth/grant"""
@@ -150,12 +147,12 @@ class IndieAuthActions(object):
 
     def bearer(self, authorization_code, client_id, redirect_url):
         return self._client.post(
-            "/indieauth/bearer",
+            "/indieauth/bearer/example-blog",
             # the data= argument passes application/x-www-form-urlencoded
             # which is what /indieauth/bearer should accept
             data={
                 "code": authorization_code,
-                "me": TestConsts.owner_profile,
+                "me": TestConsts.blog_uri,
                 "client_id": client_id,
                 "redirect_uri": redirect_url,
             },

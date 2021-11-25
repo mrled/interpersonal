@@ -14,6 +14,9 @@ from interpersonal.blueprints import indieauth
 from tests.conftest import IndieAuthActions, TestConsts
 
 
+# TODO: test that grants and bearer tokens for one blog cannot be used for another
+
+
 def test_login(client, indieauthfix):
     assert client.get("/indieauth/login").status_code == 200
     response = indieauthfix.login()
@@ -50,7 +53,7 @@ def test_authorize_GET(
     state = secrets.token_urlsafe(16)
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
-    authorize_uri = "/indieauth/authorize"
+    authorize_uri = "/indieauth/authorize/example-blog"
 
     indieauthfix.login()
 
@@ -64,7 +67,7 @@ def test_authorize_GET(
                 "state": state,
                 "code_challenge": None,
                 "code_challenge_method": None,
-                "me": testconstsfix.owner_profile,
+                "me": testconstsfix.blog_uri,
                 "scope": "profile",
             },
         )
@@ -88,7 +91,7 @@ def test_authorize_POST(
 ):
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
-    authorize_uri = "/indieauth/authorize"
+    authorize_uri = "/indieauth/authorize/example-blog"
 
     indieauthfix.login()
     response_grant = indieauthfix.grant(
@@ -128,7 +131,7 @@ def test_authorize_POST(
 
     try:
         assert response_POST.status_code == 200
-        assert testconstsfix.owner_profile == response_POST_json["me"]
+        assert testconstsfix.blog_uri == response_POST_json["me"]
     except BaseException as exc:
         print("Failed POST tests!")
         print("Response body:")
@@ -140,7 +143,7 @@ def test_authorize_GET_requires_auth(client: FlaskClient, testconstsfix: TestCon
     state = secrets.token_urlsafe(16)
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
-    authorize_uri = "/indieauth/authorize"
+    authorize_uri = "/indieauth/authorize/example-blog"
 
     response_GET = client.get(
         util.uri(
@@ -152,7 +155,7 @@ def test_authorize_GET_requires_auth(client: FlaskClient, testconstsfix: TestCon
                 "state": state,
                 "code_challenge": None,
                 "code_challenge_method": None,
-                "me": testconstsfix.owner_profile,
+                "me": testconstsfix.blog_uri,
                 "scope": "profile",
             },
         )
@@ -183,7 +186,7 @@ def test_grant(
     state = secrets.token_urlsafe(16)
     client_id = "https://client.example.net/"
     redir_uri = "https://client.example.net/redir/to/here"
-    grant_uri = "/indieauth/grant"
+    grant_uri = "/indieauth/grant/example-blog"
 
     indieauthfix.login()
 
@@ -196,7 +199,7 @@ def test_grant(
             "state": state,
             "code_challenge": None,
             "code_challenge_method": None,
-            "me": testconstsfix.owner_profile,
+            "me": testconstsfix.blog_uri,
             "scope": "profile",
         },
     )
@@ -284,7 +287,7 @@ def test_header(client: FlaskClient):
 
 
 def test_bearer_GET_requires_auth(client: FlaskClient):
-    response_GET = client.get("/indieauth/bearer")
+    response_GET = client.get("/indieauth/bearer/example-blog")
 
     try:
         assert response_GET.status_code == 302
@@ -314,10 +317,10 @@ def test_bearer_GET_valid_token(
 
     authheaders = Headers()
     authheaders["Authorization"] = f"Bearer {bearer_token}"
-    verify_result = client.get("/indieauth/bearer", headers=authheaders)
+    verify_result = client.get("/indieauth/bearer/example-blog", headers=authheaders)
     assert verify_result.status_code == 200
     assert client_id.encode() in verify_result.data
-    assert testconstsfix.owner_profile.encode() in verify_result.data
+    assert testconstsfix.blog_uri.encode() in verify_result.data
     assert b'"scopes":["create"]' in verify_result.data
 
 
@@ -338,15 +341,15 @@ def test_bearer_verify_token(
 
     with app.app_context():
         valid_verify_result = indieauth.bearer_verify_token(
-            bearer_data["access_token"],
+            bearer_data["access_token"], testconstsfix.blog_uri
         )
         assert valid_verify_result["client_id"] == client_id
-        assert valid_verify_result["me"] == testconstsfix.owner_profile
+        assert valid_verify_result["me"] == testconstsfix.blog_uri
         assert "create" in valid_verify_result["scopes"]
 
         with pytest.raises(indieauth.InvalidBearerTokenError):
             invalid_verify_result = indieauth.bearer_verify_token(
-                "invalid-access-token-lol",
+                "invalid-access-token-lol", testconstsfix.blog_uri
             )
             assert (
                 b"Invalid bearer token 'invalid-access-token-lol'"
@@ -356,7 +359,7 @@ def test_bearer_verify_token(
 
 def test_bearer_POST_requires_auth(client: FlaskClient):
     resp1 = client.post(
-        "/indieauth/bearer", data={"example": "data", "for": "thistest"}
+        "/indieauth/bearer/example-blog", data={"example": "data", "for": "thistest"}
     )
     try:
         assert resp1.status_code == 400
@@ -368,7 +371,7 @@ def test_bearer_POST_requires_auth(client: FlaskClient):
         raise exc
 
     resp2 = client.post(
-        "/indieauth/bearer",
+        "/indieauth/bearer/example-blog",
         data={
             "code": "a very invalid one",
             "client_id": "invalidcid",
@@ -410,5 +413,5 @@ def test_bearer_POST(indieauthfix: IndieAuthActions, testconstsfix: TestConsts):
 
     response_json = json.loads(response.data)
 
-    assert response_json["me"] == testconstsfix.owner_profile
+    assert response_json["me"] == testconstsfix.blog_uri
     assert response_json["scope"] == "create"

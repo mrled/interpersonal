@@ -21,7 +21,7 @@ def test_micropub_blog_endpoint_GET_auth(
     with app.app_context():
         btoken = indieauthfix.zero_to_bearer(client_id, redir_uri, state, ["create"])
 
-        unauth_response = client.get("/micropub/example")
+        unauth_response = client.get("/micropub/example-blog")
         assert unauth_response.status_code == 401
         unauth_data_json = json.loads(unauth_response.data)
         assert unauth_data_json["error"] == "unauthorized"
@@ -30,7 +30,7 @@ def test_micropub_blog_endpoint_GET_auth(
 
         authheaders = Headers()
         authheaders["Authorization"] = f"Bearer {btoken}"
-        auth_response = client.get("/micropub/example", headers=authheaders)
+        auth_response = client.get("/micropub/example-blog", headers=authheaders)
 
         assert auth_response.status_code == 400
         assert b"invalid_request" in auth_response.data
@@ -51,12 +51,12 @@ def test_micropub_blog_endpoint_GET_config(
     with app.app_context():
         headers = Headers()
         headers["Authorization"] = f"Bearer {btoken}"
-        response = client.get("/micropub/example?q=config", headers=headers)
+        response = client.get("/micropub/example-blog?q=config", headers=headers)
 
         assert response.status_code == 200
         response_json = json.loads(response.data)
         assert "media-endpoint" in response_json
-        assert response_json["media-endpoint"] == "/micropub/example/media"
+        assert response_json["media-endpoint"] == "/micropub/example-blog/media"
 
 
 def test_micropub_blog_endpoint_GET_source_valid_url(
@@ -74,7 +74,7 @@ def test_micropub_blog_endpoint_GET_source_valid_url(
         headers = Headers()
         headers["Authorization"] = f"Bearer {btoken}"
 
-        endpoint = "/micropub/example?" + urlencode(
+        endpoint = "/micropub/example-blog?" + urlencode(
             {
                 "q": "source",
                 "url": f"{testconstsfix.blog_uri}/blog/post-one",
@@ -115,7 +115,7 @@ def test_micropub_blog_endpoint_GET_source_invalid_url(
         headers = Headers()
         headers["Authorization"] = f"Bearer {btoken}"
 
-        endpoint = "/micropub/example?" + urlencode(
+        endpoint = "/micropub/example-blog?" + urlencode(
             {
                 "q": "source",
                 "url": f"{testconstsfix.blog_uri}/blog/invalid-post-url-ASDF",
@@ -148,7 +148,7 @@ def test_micropub_blog_endpoint_GET_source_no_url(
         headers = Headers()
         headers["Authorization"] = f"Bearer {btoken}"
 
-        endpoint = "/micropub/example?" + urlencode(
+        endpoint = "/micropub/example-blog?" + urlencode(
             {
                 "q": "source",
             }
@@ -178,7 +178,7 @@ def test_micropub_blog_endpoint_GET_syndicate_to(
         headers = Headers()
         headers["Authorization"] = f"Bearer {btoken}"
 
-        endpoint = "/micropub/example?" + urlencode(
+        endpoint = "/micropub/example-blog?" + urlencode(
             {
                 "q": "syndicate-to",
             }
@@ -208,7 +208,7 @@ def test_micropub_blog_endpoint_GET_invalid_q(
         headers = Headers()
         headers["Authorization"] = f"Bearer {btoken}"
 
-        endpoint = "/micropub/example?" + urlencode(
+        endpoint = "/micropub/example-blog?" + urlencode(
             {
                 "q": "something-invalid-QWER",
             }

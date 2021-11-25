@@ -132,8 +132,9 @@ class VerifiedBearerToken(typing.TypedDict):
     scopes: typing.List[str]
 
 
-def bearer_verify_token(token: str) -> VerifiedBearerToken:
+def bearer_verify_token(token: str, me: str) -> VerifiedBearerToken:
     """Verify a bearer token"""
+    # TODO: check the blog is correct in this function
     db = database.get_db()
     row = db.execute(
         """
@@ -153,7 +154,7 @@ def bearer_verify_token(token: str) -> VerifiedBearerToken:
     current_app.logger.debug(f"Found valid bearer token: {row}")
 
     return {
-        "me": current_app.config["APPCONFIG"].owner_profile,
+        "me": me,
         "client_id": row["clientId"],
         "scopes": row["scopes"].split(" "),
     }

@@ -5,6 +5,7 @@ import typing
 
 import yaml
 
+from interpersonal.errors import MicropubBlogNotFoundError
 from interpersonal.sitetypes import example, github
 from interpersonal.sitetypes.base import HugoBase
 
@@ -16,7 +17,6 @@ class AppConfig:
     loglevel: str
     database: str
     password: str
-    owner_profile: str
     cookie_secret_key: str
     blogs: typing.List[HugoBase]
 
@@ -53,12 +53,11 @@ class AppConfig:
         db = yamlcontents["database"]
         cookie_secret_key = yamlcontents["cookie_secret_key"]
         password = yamlcontents["password"]
-        owner_profile = yamlcontents["owner_profile"]
-        return cls(loglevel, db, password, owner_profile, cookie_secret_key, blogs)
+        return cls(loglevel, db, password, cookie_secret_key, blogs)
 
     def blog(self, name: str) -> HugoBase:
         """Get a blog by name"""
         for blog in self.blogs:
             if blog.name == name:
                 return blog
-        raise KeyError(f"No blog with name '{name}'")
+        raise MicropubBlogNotFoundError(name)

@@ -21,7 +21,6 @@ def test_config():
         loglevel: DEBUG
         database: {db_path}
         password: whatever
-        owner_profile: blah
         cookie_secret_key: whocaresman
         blogs:
         - name: example

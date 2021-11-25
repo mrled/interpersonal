@@ -3,12 +3,11 @@
 loglevel: DEBUG
 database: dev.db
 password: secret p@ss
-owner_profile: http://example.com
 cookie_secret_key: any value is fine in dev, even this literal string
 blogs:
   - name: example
     type: built-in example
-    uri: https://example.com/blog/
+    uri: https://example.com/
     slugprefix: /blog
   # - name: interpersonal-test
   #   type: github

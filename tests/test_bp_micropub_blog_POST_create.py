@@ -19,7 +19,7 @@ def test_action_create_post(
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
         resp = client.post(
-            "/micropub/example",
+            "/micropub/example-blog",
             data={
                 "auth_token": z2btd.btoken,
                 "action": "create",
@@ -50,10 +50,10 @@ def test_action_create_with_slug(
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
         slug = "test-poast-1"
-        post_uri = f"{testconstsfix.blog_uri}/blog/{slug}"
+        post_uri = f"{testconstsfix.blog_uri}blog/{slug}"
         post_content = "Here I am just simply poasting a test poast"
         postresp = client.post(
-            "/micropub/example",
+            "/micropub/example-blog",
             data={
                 "auth_token": z2btd.btoken,
                 "action": "create",
@@ -74,7 +74,7 @@ def test_action_create_with_slug(
             raise
 
         # Test that it is gettable
-        endpoint = "/micropub/example?" + urlencode(
+        endpoint = "/micropub/example-blog?" + urlencode(
             {
                 "q": "source",
                 "url": post_uri,
@@ -110,10 +110,10 @@ def test_action_create_without_slug(
         z2btd = indieauthfix.zero_to_bearer_with_test_data()
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
-        post_uri = f"{testconstsfix.blog_uri}/blog/test-poast-2"
+        post_uri = f"{testconstsfix.blog_uri}blog/test-poast-2"
         post_content = "Here I am just simply poasting a second test poast, and relying on automatic slug generation from the title"
         postresp = client.post(
-            "/micropub/example",
+            "/micropub/example-blog",
             data={
                 "auth_token": z2btd.btoken,
                 "action": "create",
@@ -134,7 +134,7 @@ def test_action_create_without_slug(
             raise
 
         # Test that it is gettable
-        endpoint = "/micropub/example?" + urlencode(
+        endpoint = "/micropub/example-blog?" + urlencode(
             {
                 "q": "source",
                 "url": post_uri,

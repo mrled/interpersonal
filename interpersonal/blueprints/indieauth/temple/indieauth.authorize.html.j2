@@ -3,7 +3,7 @@
 
 {% block content %}
   <main>
-    <form method="POST" action="{{ url_for('indieauth.grant') }}">
+    <form method="POST" action="{{ url_for('indieauth.grant', blog_name=blog_name) }}">
       <input hidden name="state" type="hidden" value="{{ state }}" />
       <input hidden name="redirect_uri" type="hidden" value="{{ redirect_uri }}" />
       <input hidden name="client_id" type="hidden" value="{{ client_id }}" />
@@ -34,7 +34,7 @@
         <p>Security warning: the client did not use PKCE S256 for this request.</p>
       {% endif %}
 
-      <p>Clicking "Submit" will take you to {{ url_for('indieauth.grant') }}</p>
+      <p>Clicking "Submit" will take you to {{ url_for('indieauth.grant', blog_name=blog_name) }}</p>
 
       <button type="submit">Ok</button><br><br>
     </form>
