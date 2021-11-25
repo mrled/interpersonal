@@ -27,14 +27,12 @@ from interpersonal.blueprints.indieauth.util import (
 )
 from interpersonal.consts import ALL_HTTP_METHODS
 
-#### WARNING!!! Make sure to register the error handler on each of these!
 from interpersonal.errors import (
     MicropubBlogNotFoundError,
     MicropubInsufficientScopeError,
     MicropubInvalidRequestError,
     MissingBearerAuthHeaderError,
     MissingBearerTokenError,
-    InvalidBearerTokenError,
     catchall_error_handler,
     json_error,
 )
@@ -43,15 +41,7 @@ from interpersonal.sitetypes.base import HugoBase
 
 bp = Blueprint("micropub", __name__, url_prefix="/micropub", template_folder="temple")
 
-for err in [
-    MicropubBlogNotFoundError,
-    MicropubInsufficientScopeError,
-    MicropubInvalidRequestError,
-    MissingBearerAuthHeaderError,
-    MissingBearerTokenError,
-    InvalidBearerTokenError,
-]:
-    bp.register_error_handler(err, err.handler)
+
 bp.register_error_handler(Exception, catchall_error_handler)
 
 

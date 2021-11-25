@@ -30,7 +30,6 @@ from interpersonal.consts import (
 from interpersonal.blueprints.indieauth.util import indieauth_required
 from interpersonal.util import uri_copy_and_append_query
 
-#### WARNING!!! Make sure to register the error handler on each of these!
 from interpersonal.errors import (
     IndieauthCodeVerifierMismatchError,
     IndieauthInvalidGrantError,
@@ -48,13 +47,6 @@ COOKIE_INDIE_AUTHED_VALUE = "indied (indeed) (lol)"
 bp = Blueprint("indieauth", __name__, url_prefix="/indieauth", template_folder="temple")
 
 
-for err in [
-    IndieauthCodeVerifierMismatchError,
-    IndieauthInvalidGrantError,
-    InvalidAuthCodeError,
-    InvalidBearerTokenError,
-]:
-    bp.register_error_handler(err, err.handler)
 bp.register_error_handler(Exception, catchall_error_handler)
 
 
