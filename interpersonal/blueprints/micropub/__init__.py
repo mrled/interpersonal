@@ -195,7 +195,7 @@ def slugify(text: str) -> str:
         words = lower.split(" ")
         basis = words[0:11]
         rejoined = " ".join(basis)
-        no_non_word_chars = re.sub("[^\w ]+", "", rejoined)
+        no_non_word_chars = re.sub(r"[^\w ]+", "", rejoined)
         no_spaces = re.sub(" +", "-", no_non_word_chars)
         return no_spaces
 
