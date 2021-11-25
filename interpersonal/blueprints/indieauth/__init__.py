@@ -1,12 +1,12 @@
-import re
-from urllib.parse import unquote
 import base64
 import datetime
 import functools
 import hashlib
+import re
 import secrets
 import sqlite3
 import typing
+from urllib.parse import unquote
 
 import rfc3986
 from cryptography.hazmat.primitives import constant_time
@@ -152,17 +152,32 @@ def indieauth_required(methods):
     return decorator
 
 
-def authorize_GET(
-    response_type="code",
-    client_id=None,
-    redirect_uri=None,
-    state=None,
-    code_challenge=None,
-    code_challenge_method=None,
-    me=None,
-    scope="profile",
-) -> str:
-    """Handler for the GET verb of the authorize endpoint"""
+@bp.route("/authorize", methods=["GET"])
+@indieauth_required(["GET"])
+def authorize_GET():
+    """The GET handler for the IndieAuth authorization endpoint
+
+    <https://indieauth.spec.indieweb.org/#authorization-request>
+
+    response_type=code - Indicates to the authorization server that an authorization code should be returned as the response
+    client_id - The client URL
+    redirect_uri - The redirect URL indicating where the user should be redirected to after approving the request
+    state - A parameter set by the client which will be included when the user is redirected back to the client. This is used to prevent CSRF attacks. The authorization server MUST return the unmodified state value back to the client.
+    code_challenge - The code challenge as previously described.
+    code_challenge_method - The hashing method used to calculate the code challenge, e.g. "S256"
+    scope - (optional) A space-separated list of scopes the client is requesting, e.g. "profile", or "profile create". If the client omits this value, the authorization server MUST NOT issue an access token for this authorization code. Only the user's profile URL may be returned without any scope requested. See Profile Information for details about which scopes to request to return user profile information.
+    me - (optional) The URL that the user entered
+    """
+
+    client_id = request.args.get("client_id")
+    redirect_uri = request.args.get("redirect_uri")
+    state = request.args.get("state")
+    response_type = request.args.get("response_type", "code")
+    code_challenge = request.args.get("code_challenge")
+    code_challenge_method = request.args.get("code_challenge_method")
+    scope = request.args.get("scope", "profile")
+    me = request.args.get("me")
+
     current_app.logger.debug(
         f"client_id, redirect_uri, state: {client_id}, {redirect_uri}, {state}"
     )
@@ -206,16 +221,31 @@ def authorize_GET(
     )
 
 
-def authorize_POST(
-    authorization_code,
-    origin_host,
-    client_id=None,
-    redirect_uri=None,
-    code_challenge=None,
-    code_challenge_method=None,
-    code_verifier=None,
-) -> str:
-    """Handler for the POST verb of the authorize endpoint"""
+@bp.route("/authorize", methods=["POST"])
+def authorize_POST():
+    """The POST verb for the IndieAuth authorization endpoint
+
+    Note that the GET method requires authorization,
+    but the POST method is used by an IndieAuth client and thus authorization is not required.
+
+    <https://indieauth.spec.indieweb.org/#request>
+
+    > If the client only needs to know the user who logged in and does not need to make requests to resource servers with an access token, the client exchanges the authorization code for the user's profile URL at the authorization endpoint.
+
+    (By contrast, micropub clients which DO need to make requests to resource servers with an access token use the "token endpoint")
+
+    code - An authorization_code generated from the /grant endpoint
+    client_id - The client URL
+    redirect_uri - The redirect URL indicating where the user should be redirected to after approving the request
+    """
+    authorization_code = request.form["code"]
+    origin_host = request.headers["Host"]
+    client_id = request.form["client_id"]
+    redirect_uri = request.form["redirect_uri"]
+    code_challenge = request.form.get("code_challenge")
+    code_challenge_method = request.form.get("code_challenge_method")
+    code_verifier = request.form.get("code_verifier")
+
     redeem_auth_code(
         authorization_code, client_id, redirect_uri, origin_host, code_verifier
     )
@@ -228,64 +258,6 @@ def authorize_POST(
             "me": current_app.config["APPCONFIG"].owner_profile,
         }
     )
-
-
-@bp.route("/authorize", methods=["GET", "POST"])
-@indieauth_required(["GET"])
-def authorize():
-    """The IndieAuth authorization endpoint
-
-    Note that the GET method requires authorization,
-    but the POST method is used by an IndieAuth client and thus authorization is not required.
-
-    For the GET endpoint:
-
-    <https://indieauth.spec.indieweb.org/#authorization-request>
-
-    response_type=code - Indicates to the authorization server that an authorization code should be returned as the response
-    client_id - The client URL
-    redirect_uri - The redirect URL indicating where the user should be redirected to after approving the request
-    state - A parameter set by the client which will be included when the user is redirected back to the client. This is used to prevent CSRF attacks. The authorization server MUST return the unmodified state value back to the client.
-    code_challenge - The code challenge as previously described.
-    code_challenge_method - The hashing method used to calculate the code challenge, e.g. "S256"
-    scope - (optional) A space-separated list of scopes the client is requesting, e.g. "profile", or "profile create". If the client omits this value, the authorization server MUST NOT issue an access token for this authorization code. Only the user's profile URL may be returned without any scope requested. See Profile Information for details about which scopes to request to return user profile information.
-    me - (optional) The URL that the user entered
-
-    For the POST endpoint:
-
-    <https://indieauth.spec.indieweb.org/#request>
-
-    > If the client only needs to know the user who logged in and does not need to make requests to resource servers with an access token, the client exchanges the authorization code for the user's profile URL at the authorization endpoint.
-
-    (By contrast, micropub clients which DO need to make requests to resource servers with an access token use the "token endpoint")
-
-    code - An authorization_code generated from the /grant endpoint
-    client_id - The client URL
-    redirect_uri - The redirect URL indicating where the user should be redirected to after approving the request
-    """
-
-    if request.method == "GET":
-        return authorize_GET(
-            client_id=request.args.get("client_id"),
-            redirect_uri=request.args.get("redirect_uri"),
-            state=request.args.get("state"),
-            response_type=request.args.get("response_type", "code"),
-            code_challenge=request.args.get("code_challenge"),
-            code_challenge_method=request.args.get("code_challenge_method"),
-            scope=request.args.get("scope", "profile"),
-            me=request.args.get("me"),
-        )
-
-    elif request.method == "POST":
-        return authorize_POST(
-            request.form["code"],
-            request.headers["Host"],
-            request.form["client_id"],
-            request.form["redirect_uri"],
-            code_challenge=request.form.get("code_challenge"),
-            code_challenge_method=request.form.get("code_challenge_method"),
-            code_verifier=request.form.get("code_verifier"),
-        )
 
 
 @bp.route("/grant", methods=["POST"])
@@ -454,7 +426,7 @@ def bearer_verify_token(token: str) -> VerifiedBearerToken:
 
 
 @bp.route("/bearer", methods=["GET"])
-@indieauth_required(ALL_HTTP_METHODS)
+@indieauth_required(["GET"])
 def bearer_GET():
     """Handle a GET request for the bearer endpoint
 
