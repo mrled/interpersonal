@@ -20,12 +20,12 @@ from flask import (
 )
 from flask.wrappers import Response
 
-from interpersonal.blueprints.indieauth import (
-    ALL_HTTP_METHODS,
+from interpersonal.blueprints.indieauth.util import (
     VerifiedBearerToken,
     bearer_verify_token,
     indieauth_required,
 )
+from interpersonal.consts import ALL_HTTP_METHODS
 
 #### WARNING!!! Make sure to register the error handler on each of these!
 from interpersonal.errors import (

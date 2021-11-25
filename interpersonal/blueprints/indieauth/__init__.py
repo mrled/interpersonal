@@ -1,6 +1,5 @@
 import base64
 import datetime
-import functools
 import hashlib
 import re
 import secrets
@@ -23,7 +22,13 @@ from flask import (
     url_for,
 )
 
-from interpersonal import database, util
+from interpersonal import database
+from interpersonal.consts import (
+    ALL_HTTP_METHODS,
+    SCOPE_INFO,
+)
+from interpersonal.blueprints.indieauth.util import indieauth_required
+from interpersonal.util import uri_copy_and_append_query
 
 #### WARNING!!! Make sure to register the error handler on each of these!
 from interpersonal.errors import (
@@ -31,11 +36,17 @@ from interpersonal.errors import (
     IndieauthInvalidGrantError,
     InvalidAuthCodeError,
     InvalidBearerTokenError,
-    catchall_error_handler,
     render_error,
+    catchall_error_handler,
 )
 
+
+COOKIE_INDIE_AUTHED = "indie_authed"
+COOKIE_INDIE_AUTHED_VALUE = "indied (indeed) (lol)"
+
+
 bp = Blueprint("indieauth", __name__, url_prefix="/indieauth", template_folder="temple")
+
 
 for err in [
     IndieauthCodeVerifierMismatchError,
@@ -47,29 +58,13 @@ for err in [
 bp.register_error_handler(Exception, catchall_error_handler)
 
 
-# These are mostly not used yet... I'd like to implement micropub at some point soon though
-SCOPE_INFO = {
-    "profile": "Get basic profile information",
-    "email": "Get profile email address",
-    "create": "Create new posts using Micropub",
-    "update": "Edit existing posts using Micropub",
-    "delete": "Delete posts using Micropub",
-    "undelete": "Restore deleted posts using Micropub",
-    "media": "Upload files using Micropub",
-}
-COOKIE_INDIE_AUTHED = "indie_authed"
-COOKIE_INDIE_AUTHED_VALUE = "indied (indeed) (lol)"
-ALL_HTTP_METHODS = [
-    "GET",
-    "HEAD",
-    "POST",
-    "PUT",
-    "DELETE",
-    "CONNECT",
-    "OPTIONS",
-    "TRACE",
-    "PATCH",
-]
+@bp.before_app_request
+def load_logged_in_user():
+    """Determine whether user is logged in before any view function runs
+
+    It is safe to do this in the cookie, because we are using encrypted cookies.
+    """
+    g.indieauthed = session.get(COOKIE_INDIE_AUTHED) is not None
 
 
 @bp.route("/")
@@ -102,54 +97,11 @@ def login():
     return render_template("indieauth.login.html.j2")
 
 
-@bp.before_app_request
-def load_logged_in_user():
-    """Determine whether user is logged in before any view function runs
-
-    It is safe to do this in the cookie, because we are using encrypted cookies.
-    """
-    g.indieauthed = session.get(COOKIE_INDIE_AUTHED) is not None
-
-
 @bp.route("/logout")
 def logout():
     """Log the user out immediately"""
     session.clear()
     return redirect(url_for("indieauth.index"))
-
-
-def indieauth_required(methods):
-    """A decorator to indicate that IndieAuth login is required for a given route
-
-    Can protect only some methods by passing methods=[...list...]
-
-    WARNING: Decorator functions that take arguments, like this one does,
-    must take only positional arguments!
-    If there is a default value for the methods argument,
-    Flask will give erros like:
-
-        AssertionError: View function mapping is overwriting an existing endpoint function: indieauth.decorator
-
-    An example of working code:
-    <https://stackoverflow.com/questions/54032502/decorators-with-arguments-with-flask>
-    """
-
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            current_app.logger.debug(
-                f"@indieauth_required({methods}) wraps urlfunc {func.__name__}. request.method: {request.method}; g.indieauthed: {g.indieauthed}."
-            )
-            if request.method in methods and not g.indieauthed:
-                current_app.logger.debug(
-                    f"Attempted to visit {request.url} without logging in; redirecting to login page first..."
-                )
-                return redirect(url_for("indieauth.login", next=request.url))
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
 
 
 @bp.route("/authorize", methods=["GET"])
@@ -292,7 +244,7 @@ def grant():
     # <https://indieauth.spec.indieweb.org/#authorization-response>
     # Note that the URI is defined by the client,
     # but we have to append code= and state= parameters.
-    redir_dest = util.uri_copy_and_append_query(
+    redir_dest = uri_copy_and_append_query(
         redirect_uri,
         {
             "code": authorization_code,  # We call this 'code' here because that's what OAuth 2.0 calls it

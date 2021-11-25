@@ -50,6 +50,12 @@ class IndieauthCodeVerifierMismatchError(Exception):
         return render_error(400, "Invalid grant: code_verified didn't match")
 
 
+class IndieauthMissingCodeVerifierError(Exception):
+    @staticmethod
+    def handler(exc):
+        return render_error(400, "Missing code_verifier for S256")
+
+
 class InvalidBearerTokenError(Exception):
     def __init__(self, token):
         self.token = token

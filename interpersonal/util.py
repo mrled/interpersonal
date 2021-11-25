@@ -1,12 +1,7 @@
 """Interpersonal utility functions"""
 
 from urllib.parse import parse_qs, urlencode, urlparse
-import functools
 import typing
-from fastcore.basics import strcat
-
-from flask import current_app, jsonify, render_template
-from flask.helpers import url_for
 
 
 def querystr(d: typing.Dict, prefix=False) -> str:
@@ -33,54 +28,6 @@ def uri(u: str, d: typing.Dict = None) -> str:
     """
     qs = querystr(d, prefix=True)
     return f"{u}{qs}"
-
-
-# def qsargs(*names, **names_and_processors):
-#     """Decorator so that Flask routes can use query strings as function parameters
-
-#     <https://stackoverflow.com/questions/34587634/get-query-string-as-function-parameters-on-flask>
-
-#     Without this, to access the query string from a Flask function,
-#     you would do something like:
-
-#         @app.route("/whatever")
-#         def whatever():
-#             asdf = request.get("asdf", "some-default-value")
-#             age = int(request.get("age"))
-#             return f"You got one {asdf} aged {age}"
-
-#     For functions wrapped with this, it's a little nicer and more natural Python:
-
-#         @app.route("/whatever")
-#         @qsargs("asdf", age=int)
-#         def whatever(asdf, age):
-#             return f"You got one {asdf} aged {age}"
-
-#     """
-#     user_args = [{"key": name} for name in names] + [
-#         {"key": key, "type": processor}
-#         for (key, processor) in names_and_processors.items()
-#     ]
-
-#     def args_from_request(to_extract, provided_args, provided_kwargs):
-#         # Ignoring provided_* here - ideally, you'd merge them
-#         # in whatever way makes the most sense for your application
-#         result = {}
-#         for arg in to_extract:
-#             result[arg["key"]] = request.args.get(**arg)
-#         return provided_args, result
-
-#     def decorator(f):
-#         @functools.wraps(f)
-#         def wrapper(*args, **kwargs):
-#             final_args, final_kwargs = args_from_request(user_args, args, kwargs)
-#             return f(*final_args, **final_kwargs)
-
-#         return wrapper
-
-#     return (
-#         decorator if len(names) < 1 or not callable(names[0]) else decorator(names[0])
-#     )
 
 
 def uri_copy_and_append_query(u: str, d: typing.Dict = None) -> str:
@@ -156,33 +103,3 @@ class CaseInsensitiveDict(dict):
         for k in list(self.keys()):
             v = super(CaseInsensitiveDict, self).pop(k)
             self.__setitem__(k, v)
-
-
-# def absolute_url_for(current_app, view, **kwargs):
-#     """Generate an absolute URL for a view.
-
-#     Takes a view function name, like `flask.url_for`, and returns that view
-#     function's URL prefixed with the full & correct scheme and domain.
-
-#     via: <https://github.com/pallets/flask/issues/824#issuecomment-302904753>
-
-#     Unfortunately Flask doesn't offer this functionality.
-#     Needed at least for verifying the bearer token, where the micropub server
-#     must make a request to the indieauth server.
-#     """
-#     parsed_url = urlparse(url_for(view, _external=True, **kwargs))
-#     app_scheme = urlparse(current_app.config["HOST"]).scheme
-#     final_parsed_url = parsed_url._replace(scheme=app_scheme)
-#     return final_parsed_url.geturl()
-
-
-def parse_opt_scope_list(scopes: typing.Optional[str]) -> typing.List[str]:
-    """Parse scope input
-
-    Scopes might not be specified, or might be a space separated list.
-
-    If a scope is not specified, it means 'create'.
-    """
-    if scopes:
-        return scopes.split(" ")
-    return ["create"]
