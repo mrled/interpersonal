@@ -71,7 +71,7 @@ class HugoPostSource:
         return cls(frontmatter, body)
 
     def tostr(self) -> str:
-        return "\n---\n{}\n---\n\n{}".format(yaml.dump(self.frontmatter), self.content)
+        return "---\n{}\n---\n\n{}".format(yaml.dump(self.frontmatter), self.content)
 
     @property
     def mf2json(self):
