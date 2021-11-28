@@ -11,6 +11,24 @@ import yaml
 from interpersonal.util import CaseInsensitiveDict
 
 
+def slugify(text: str) -> str:
+    """Given some input text, create a URL slug
+
+    Designed to handle a title, or a full post content.
+    """
+    if not text:
+        # Return a date
+        return datetime.now().strftime("%Y%m%d-%H%M")
+    else:
+        lower = text.lower()
+        words = lower.split(" ")
+        basis = words[0:11]
+        rejoined = " ".join(basis)
+        no_non_word_chars = re.sub(r"[^\w ]+", "", rejoined)
+        no_spaces = re.sub(" +", "-", no_non_word_chars)
+        return no_spaces
+
+
 def normalize_baseuri(baseuri: str) -> str:
     """Normalize a baseuri
 
@@ -133,6 +151,28 @@ class HugoBase:
     def add_post(self, slug: str, frontmatter: typing.Dict, content: str) -> str:
         post = HugoPostSource(frontmatter, content)
         return self._add_raw_post_body(slug, post.tostr())
+
+    def add_post_mf2(self, mf2obj: typing.Dict):
+        """Add a post from a microfotmats2 json object"""
+        content = ""
+        frontmatter = {}
+        slug = ""
+        name = ""
+        for k, v in mf2obj["properties"].items():
+            if k == "content":
+                content = v[0]
+            elif k == "slug":
+                slug = v[0]
+            elif k == "name":
+                name = v[0]
+                frontmatter["title"] = v[0]
+            else:
+                frontmatter[k] = v
+        if not slug:
+            slug = slugify(name or content)
+        if "date" not in mf2obj["properties"]:
+            frontmatter["date"] = datetime.utcnow().strftime("%Y-%m-%d")
+        return self.add_post(slug, frontmatter, content)
 
     def _post_path(self, slug: str) -> str:
         """Given a slug of a post, return the full path.

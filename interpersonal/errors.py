@@ -34,7 +34,9 @@ def catchall_error_handler(exc: Exception):
         return exc.__interpersonal_exception_handler__()
     else:
         current_app.logger.exception(exc)
-        return json_error(500, "Unhandled internal error", str(exc))
+        # estr = "{err}\n{tb}".format(err=str(exc), tb=exc.__traceback__.__annotations__)
+        estr = traceback.format_exception(type(exc), exc, exc.__traceback__)
+        return json_error(500, "Unhandled internal error", estr)
 
 
 class InvalidAuthCodeError(Exception):

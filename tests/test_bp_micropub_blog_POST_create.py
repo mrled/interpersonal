@@ -9,7 +9,7 @@ from werkzeug.datastructures import Headers
 from tests.conftest import IndieAuthActions, TestConsts
 
 
-def test_action_create_post(
+def test_action_create_post_www_form_urlencoded(
     app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient
 ):
     """Content-type of application/x-www-form-urlencoded should parse correctly"""
@@ -32,6 +32,41 @@ def test_action_create_post(
             assert resp.status_code == 200
             respjson = json.loads(resp.data)
             assert respjson["interpersonal_test_result"] == actest_value
+            assert respjson["action"] == "create"
+        except BaseException:
+            print(f"Failing test. Response body: {resp.data}")
+            raise
+
+
+def test_action_create_post_json(
+    app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient
+):
+    """Content-type of application/x-www-form-urlencoded should parse correctly"""
+    with app.app_context():
+        z2btd = indieauthfix.zero_to_bearer_with_test_data()
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {z2btd.btoken}"
+        actest_value = "an testing value,,,"
+        resp = client.post(
+            "/micropub/example-blog",
+            json={
+                "auth_token": z2btd.btoken,
+                "action": "create",
+                "type": ["h-entry"],
+                "interpersonal_action_test": actest_value,
+                "properties": {
+                    "name": ["Test post from json"],
+                    "content": [
+                        "I'm not sure why json content is in a list like this? can there be more than one item in this list?"
+                    ],
+                },
+            },
+            headers=headers,
+        )
+
+        try:
+            assert resp.status_code == 200
+            respjson = json.loads(resp.data)
             assert respjson["action"] == "create"
         except BaseException:
             print(f"Failing test. Response body: {resp.data}")

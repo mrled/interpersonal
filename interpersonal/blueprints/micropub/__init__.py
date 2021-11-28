@@ -173,62 +173,32 @@ def process_POST_body(
     return (request_body, request_files)
 
 
-def slugify(text: str) -> str:
-    """Given some input text, create a URL slug
+def form_body_to_mf2_json(request_body: typing.Dict):
+    """Given a request body from a form, return microformats2 json"""
 
-    Designed to handle a title, or a full post content.
-    """
-    if not text:
-        # Return a date
-        return datetime.datetime.now().strftime("%Y%m%d-%H%M")
-    else:
-        lower = text.lower()
-        words = lower.split(" ")
-        basis = words[0:11]
-        rejoined = " ".join(basis)
-        no_non_word_chars = re.sub(r"[^\w ]+", "", rejoined)
-        no_spaces = re.sub(" +", "-", no_non_word_chars)
-        return no_spaces
+    # Keys in this list are part of our application, not mf2 json, so we ignore them
+    ignored_keys = ["auth_token", "action"]
 
-
-def new_post_from_request(request_body: typing.Dict, blog: HugoBase):
-    """Instruct the blog to create a new post
-
-    request_body:   Dict from a parsed and normalized request body
-    blog:           The blog to create the post on
-    """
-    frontmatter = {}
-    content = ""
-    slug = ""
-    content_type = ""
-    # TODO: add test for urlencoded body where k ends with [] to indicate an array
-    # e.g. ?tag[]=hacking&tag[]=golang should end up with both 'hacking' and 'golang' tags
+    result = {
+        "type": ["h-entry"],
+        "properties": {},
+    }
     for k, v in request_body.items():
-        if k in ["auth_token", "action"]:
+        if k in ignored_keys:
             continue
         elif k == "h":
-            content_type = v
-        elif k == "content":
-            content = v
-        elif k == "slug":
-            slug = v
-        elif k == "name":
-            frontmatter["title"] = v
+            result["type"] = [v]
+        elif k.endswith("[]"):
+            # Form convention is that a list is made like this:
+            # ?tag[]=tag1&tag[]=tag2
+            # Handle that here
+            propname = k[0:-2]
+            if propname not in result["properties"]:
+                result["properties"][propname] = []
+            result["properties"][propname] += [v]
         else:
-            frontmatter[k] = v
-    if not slug:
-        slug = slugify(frontmatter.get("title") or content)
-    if not content:
-        raise MicropubInvalidRequestError("Missing 'content'")
-    if not content_type:
-        raise MicropubInvalidRequestError("Missing 'h'")
-    if "date" not in frontmatter:
-        frontmatter["date"] = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-    new_post_location = blog.add_post(slug, frontmatter, content)
-    resp = Response("")
-    resp.headers["Location"] = new_post_location
-    resp.status_code = 201
-    return resp
+            result["properties"][k] = [v]
+    return result
 
 
 @bp.route("/<blog_name>", methods=["POST"])
@@ -286,7 +256,25 @@ def micropub_blog_endpoint_POST(blog_name: str):
         return jsonify({"interpersonal_test_result": actest, "action": action})
 
     if action == "create":
-        return new_post_from_request(request_body, blog)
+
+        if content_type == "application/json":
+            mf2obj = request_body
+        elif (
+            content_type == "application/x-www-form-urlencoded"
+            or content_type.startswith("multipart/form-data")
+        ):
+            mf2obj = form_body_to_mf2_json(request_body)
+        else:
+            raise MicropubInvalidRequestError(
+                f"Unhandled 'Content-type': '{content_type}'"
+            )
+
+        new_post_location = blog.add_post_mf2(mf2obj)
+        resp = Response("")
+        resp.headers["Location"] = new_post_location
+        resp.status_code = 201
+        return resp
+
     else:
         return json_error(500, f"Unhandled action '{action}'")
 
