@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 
 from flask.app import Flask
 from flask.testing import FlaskClient
-from werkzeug.datastructures import Headers
+from werkzeug.datastructures import Headers, MultiDict
 
 from tests.conftest import IndieAuthActions, TestConsts
 
@@ -35,6 +35,71 @@ def test_action_create_post_www_form_urlencoded(
             assert respjson["action"] == "create"
         except BaseException:
             print(f"Failing test. Response body: {resp.data}")
+            raise
+
+
+def test_action_create_post_www_form_urlencoded_multi_tag(
+    app: Flask,
+    indieauthfix: IndieAuthActions,
+    client: FlaskClient,
+    testconstsfix: TestConsts,
+):
+    """Content-type of application/x-www-form-urlencoded should parse correctly"""
+    with app.app_context():
+        z2btd = indieauthfix.zero_to_bearer_with_test_data()
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {z2btd.btoken}"
+        slug = "form-multi-tag-test"
+        posturi = f"{testconstsfix.blog_uri}blog/{slug}"
+
+        # A MultiDict is a Werkzeug data structure that allows duplicate keys.
+        # Useful for the tag[] construction, which is meant to convey a list.
+        data = MultiDict(
+            [
+                ["auth_token", z2btd.btoken],
+                ["action", "create"],
+                ["tag[]", "tagone"],
+                ["tag[]", "tagtwo"],
+                ["content", "Test content whatever"],
+                ["slug", slug],
+            ]
+        )
+
+        resp = client.post(
+            "/micropub/example-blog",
+            data=data,
+            headers=headers,
+        )
+
+        try:
+            assert resp.status_code == 201
+            assert resp.headers["Location"] == posturi
+        except BaseException:
+            print(f"Failing test. Response body: {resp.data}")
+            raise
+
+        # Test that it is gettable
+        endpoint = "/micropub/example-blog?" + urlencode(
+            {
+                "q": "source",
+                "url": posturi,
+            }
+        )
+        getresp = client.get(
+            endpoint,
+            headers=headers,
+        )
+
+        try:
+            assert getresp.status_code == 200
+            json_data = json.loads(getresp.data)
+            props = json_data["properties"]
+            tags = props["tag"]
+            assert "tagone" in tags
+            assert "tagtwo" in tags
+            app.logger.debug(json.dumps(json_data, indent=2))
+        except BaseException:
+            print(f"Failing test. Response body: {getresp.data}")
             raise
 
 
@@ -79,7 +144,7 @@ def test_action_create_post_json_micropub_rocks(
     client: FlaskClient,
     testconstsfix: TestConsts,
 ):
-    """Some json tests from micropub.rocks"""
+    """Test json the way micropub.rocks does"""
     with app.app_context():
         z2btd = indieauthfix.zero_to_bearer_with_test_data()
         headers = Headers()

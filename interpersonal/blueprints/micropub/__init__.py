@@ -183,21 +183,26 @@ def form_body_to_mf2_json(request_body: typing.Dict):
         "type": ["h-entry"],
         "properties": {},
     }
-    for k, v in request_body.items():
+    for k in request_body:
+
+        # Note that v is now a list, possibly of just a single item, not a scalar
+        # Note that mf2 uses lists for many things, so this is actually fine
+        v = request_body.getlist(k)
+
         if k in ignored_keys:
             continue
         elif k == "h":
-            result["type"] = [v]
+            result["type"] = v
         elif k.endswith("[]"):
             # Form convention is that a list is made like this:
             # ?tag[]=tag1&tag[]=tag2
             # Handle that here
             propname = k[0:-2]
             if propname not in result["properties"]:
-                result["properties"][propname] = []
-            result["properties"][propname] += [v]
+                result["properties"][propname] = v
         else:
-            result["properties"][k] = [v]
+            result["properties"][k] = v
+
     return result
 
 
@@ -273,6 +278,7 @@ def micropub_blog_endpoint_POST(blog_name: str):
         resp = Response("")
         resp.headers["Location"] = new_post_location
         resp.status_code = 201
+
         return resp
 
     else:

@@ -9,7 +9,7 @@ from interpersonal.sitetypes import base
 
 _example_repo_posts = {
     "/blog/post-one": textwrap.dedent(
-        """
+        """\
         ---
         title: Post one
         date: 2021-01-27
@@ -23,7 +23,7 @@ _example_repo_posts = {
         """
     ),
     "/blog/post-two": textwrap.dedent(
-        """
+        """\
         ---
         title: Post two
         date: 2021-02-14

@@ -71,7 +71,7 @@ class HugoPostSource:
         return cls(frontmatter, body)
 
     def tostr(self) -> str:
-        return "---\n{}\n---\n\n{}".format(yaml.dump(self.frontmatter), self.content)
+        return "---\n{}---\n\n{}\n".format(yaml.dump(self.frontmatter), self.content)
 
     @property
     def mf2json(self):
@@ -85,8 +85,10 @@ class HugoPostSource:
             props[k.replace("_", "-")] = v
         if "title" in fm:
             props["name"] = [fm["title"]]
+            del fm["title"]
         if "description" in fm:
             props["summary"] = [fm["description"]]
+            del fm["description"]
         if "date" in fm:
             pubdate = fm["date"]
             if type(pubdate) == date:
@@ -94,14 +96,19 @@ class HugoPostSource:
             if not isinstance(pubdate, datetime):
                 pubdate = datetime.fromisoformat(pubdate.replace("Z", "+00:00"))
             props["published"] = [pubdate.isoformat(timespec="seconds")]
+            del fm["date"]
         if "updated" in fm:
             if not isinstance(fm["updated"], datetime):
                 fm["updated"] = datetime.fromisoformat(
                     fm["updated"].replace("Z", "+00:00")
                 )
             props["updated"] = [fm["updated"].isoformat(timespec="seconds")]
+            del fm["updated"]
         if "tags" in fm:
             props["category"] = fm["tags"]
+            del fm["tags"]
+        for k, v in fm.items():
+            props[k] = v
         if len(self.content.strip()) > 0:
             props["content"] = [{"markdown": self.content}]
         return {"properties": props}
