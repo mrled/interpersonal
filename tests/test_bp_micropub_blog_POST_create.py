@@ -288,3 +288,61 @@ def test_action_create_without_slug(
         except BaseException:
             print(f"Failing test. Response body: {getresp.data}")
             raise
+
+
+def test_action_create_dupe_should_error(
+    app: Flask,
+    indieauthfix: IndieAuthActions,
+    client: FlaskClient,
+    testconstsfix: TestConsts,
+):
+    """If a client requests that we create a post with the same slug as an existing one, should error"""
+    with app.app_context():
+        z2btd = indieauthfix.zero_to_bearer_with_test_data()
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {z2btd.btoken}"
+        slug = "test_action_create_dupe_should_error"
+        post_uri = f"{testconstsfix.blog_uri}blog/{slug}"
+        post_content = "Here I am just simply poasting a test poast for test_action_create_dupe_should_error"
+        postresp = client.post(
+            "/micropub/example-blog",
+            data={
+                "auth_token": z2btd.btoken,
+                "action": "create",
+                "h": "entry",
+                "content": post_content,
+                "slug": slug,
+            },
+            headers=headers,
+        )
+
+        try:
+            assert postresp.status_code == 201
+            assert postresp.headers["Location"] == post_uri
+        except BaseException:
+            print(f"Failing test. Response body: {postresp.data}")
+            raise
+
+        # Now try to create it again
+        post2resp = client.post(
+            "/micropub/example-blog",
+            data={
+                "auth_token": z2btd.btoken,
+                "action": "create",
+                "h": "entry",
+                "content": post_content,
+                "slug": slug,
+            },
+            headers=headers,
+        )
+
+        try:
+            assert post2resp.status_code == 400
+            p2r_json = json.loads(post2resp.data)
+            assert (
+                p2r_json["error_description"]
+                == f"A post with URI <{post_uri}> already exists"
+            )
+        except BaseException:
+            print(f"Failing test. Response body: {post2resp.data}")
+            raise

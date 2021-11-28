@@ -173,7 +173,3 @@ def test_e2e_github_microblog_create_post(
         except BaseException:
             print(f"Failing test. Response body: {resp.data}")
             raise
-
-
-## TODO: Test that creating post with same slug fails
-## TODO: When creating post with same slug fails, show a useful error

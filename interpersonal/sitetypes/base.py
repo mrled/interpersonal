@@ -7,7 +7,9 @@ import typing
 from datetime import date, datetime
 
 import yaml
+from flask import current_app
 
+from interpersonal.errors import MicropubDuplicatePostError
 from interpersonal.util import CaseInsensitiveDict
 
 
@@ -157,6 +159,25 @@ class HugoBase:
 
     def add_post(self, slug: str, frontmatter: typing.Dict, content: str) -> str:
         post = HugoPostSource(frontmatter, content)
+
+        # Return a good error message if the post already exists
+        # Clients can modify a post by updating it, but creating a new post with the same URL as an old one should be an error
+        #
+        # TODO: This should probably be more complicated
+        # Each blog should probably define how slugs should be handled -
+        # require the client to send it, generate it from title/content, generate it from the date, something else?
+        posturi = self._post_uri(slug)
+        oldpost = None
+        try:
+            oldpost = self.get_post(posturi)
+        except BaseException as exc:
+            current_app.logger.debug(
+                f"Could not .get_post({posturi}) due to error '{exc}'. Assuming this is correct and moving on..."
+            )
+            current_app.logger.exception(exc)
+        if oldpost is not None:
+            raise MicropubDuplicatePostError(uri=posturi)
+
         return self._add_raw_post_body(slug, post.tostr())
 
     def add_post_mf2(self, mf2obj: typing.Dict):
@@ -192,6 +213,10 @@ class HugoBase:
             return f"{self.slugprefix}/{slug}"
         else:
             return f"{slug}"
+
+    def _post_uri(self, slug: str) -> str:
+        """Given the slug of a post, return the full URI"""
+        return f"{self.baseuri}{self._post_path(slug)}"
 
     def _add_raw_post_body(self, slug: str, raw_body: str):
         raise NotImplementedError("Please implement this in the subclass")

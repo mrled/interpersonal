@@ -107,3 +107,14 @@ class MicropubBlogNotFoundError(Exception):
 
     def __interpersonal_exception_handler__(self):
         return render_error(404, f"No such blog configured: {self.blog_name}")
+
+
+class MicropubDuplicatePostError(Exception):
+    def __init__(self, uri: str = ""):
+        self.uri = uri
+
+    def __str__(self):
+        return f"A post with URI <{self.uri}> already exists"
+
+    def __interpersonal_exception_handler__(self):
+        return json_error(400, "invalid_request", str(self))
