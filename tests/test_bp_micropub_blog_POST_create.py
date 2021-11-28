@@ -41,7 +41,7 @@ def test_action_create_post_www_form_urlencoded(
 def test_action_create_post_json(
     app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient
 ):
-    """Content-type of application/x-www-form-urlencoded should parse correctly"""
+    """JSON posts should parse correctly"""
     with app.app_context():
         z2btd = indieauthfix.zero_to_bearer_with_test_data()
         headers = Headers()
@@ -68,6 +68,37 @@ def test_action_create_post_json(
             assert resp.status_code == 200
             respjson = json.loads(resp.data)
             assert respjson["action"] == "create"
+        except BaseException:
+            print(f"Failing test. Response body: {resp.data}")
+            raise
+
+
+def test_action_create_post_json_micropub_rocks(
+    app: Flask,
+    indieauthfix: IndieAuthActions,
+    client: FlaskClient,
+    testconstsfix: TestConsts,
+):
+    """Some json tests from micropub.rocks"""
+    with app.app_context():
+        z2btd = indieauthfix.zero_to_bearer_with_test_data()
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {z2btd.btoken}"
+        posturi = f"{testconstsfix.blog_uri}blog/mpr-test-post-one-nice"
+        resp = client.post(
+            "/micropub/example-blog",
+            json={
+                "type": ["h-entry"],
+                "properties": {
+                    "content": ["mpr test post one, nice"],
+                },
+            },
+            headers=headers,
+        )
+
+        try:
+            assert resp.status_code == 201
+            assert resp.headers["Location"] == posturi
         except BaseException:
             print(f"Failing test. Response body: {resp.data}")
             raise
