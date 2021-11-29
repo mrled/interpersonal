@@ -20,6 +20,7 @@ from flask import (
     url_for,
 )
 from flask.wrappers import Response
+from werkzeug.datastructures import Headers
 
 from interpersonal.blueprints.indieauth.util import (
     VerifiedBearerToken,
@@ -29,6 +30,7 @@ from interpersonal.blueprints.indieauth.util import (
 from interpersonal.consts import ALL_HTTP_METHODS
 
 from interpersonal.errors import (
+    AuthenticationProvidedTwiceError,
     MicropubInsufficientScopeError,
     MicropubInvalidRequestError,
     MissingBearerAuthHeaderError,
@@ -37,6 +39,7 @@ from interpersonal.errors import (
     json_error,
 )
 from interpersonal.sitetypes.base import HugoBase
+from interpersonal.util import listflatten
 
 
 bp = Blueprint("micropub", __name__, url_prefix="/micropub", template_folder="temple")
@@ -130,27 +133,54 @@ def micropub_blog_endpoint_GET(blog_name: str):
         )
 
 
-def authenticate_POST(req: Request, blog: HugoBase) -> VerifiedBearerToken:
+def authenticate_POST(
+    req_headers: Headers, processed_req_body: typing.Dict, blog: HugoBase
+) -> VerifiedBearerToken:
     """Authenticate a POST request
+
+    req_headers:            The Headaers from the request.
+    processed_req_body:     The processed body from the request.
+                            Normalized body whether this is a form or JSON request.
+    blog:                   The blog for this request.
 
     POST requetss can be authenticated by either an auth token header or an
     auth token in the submitted form.
+
+
+
+    TODO: Match OAuth Bearer Token RFC more closely
+        Look for "access_token" in this document
+        <https://datatracker.ietf.org/doc/html/rfc6750>
+        Note that per the Micropub spec
+        <https://www.w3.org/TR/micropub/#h-authentication-1>,
+        "Micropub requests MUST be authenticated by including a Bearer Token in either the HTTP header or a form-encoded body parameter as described in the OAuth Bearer Token RFC."
+        That RFC is constrained more than we are here, should fix.
     """
-    current_app.logger.debug(f"authenticate_POST: all headers: {req.headers}")
-    form_encoded = req.headers.get("Content-type") in [
+    current_app.logger.debug(f"authenticate_POST: all headers: {req_headers}")
+    form_encoded = req_headers.get("Content-type") in [
         "application/x-www-form-urlencoded",
         "multipart/form-data",
     ]
-    form_auth_token = req.form.get("auth_token")
-    if form_encoded and form_auth_token:
-        current_app.logger.debug(f"authenticate_POST(): Using auth_token from form...")
-        verified = bearer_verify_token(form_auth_token, blog.baseuri)
+    body_access_token = processed_req_body.get("access_token")
+
+    if req_headers.get("Authorization") and body_access_token:
+        raise AuthenticationProvidedTwiceError
+    elif form_encoded and body_access_token:
+        current_app.logger.debug(
+            f"authenticate_POST(): Using access_token from form..."
+        )
+        verified = bearer_verify_token(body_access_token, blog.baseuri)
     else:
         current_app.logger.debug(f"authenticate_POST(): Using Authorization header...")
         verified = bearer_verify_token_from_auth_header(
-            req.headers.get("Authorization"), blog.baseuri
+            req_headers.get("Authorization"), blog.baseuri
         )
     return verified
+
+
+def listflatten(lists) -> typing.List:
+    """Given a list of lists, return a flattened single list"""
+    return [val for sublist in lists for val in sublist]
 
 
 def process_POST_body(
@@ -159,6 +189,8 @@ def process_POST_body(
     """Process a POST request body and return a tuple of the body and files
 
     Manage a POST body whether it is in JSON format or a form
+
+    WARNING: This function is called BEFORE the request is authenticated!
     """
     request_body = {}
     request_files = {}
@@ -168,7 +200,17 @@ def process_POST_body(
         request_body = req.form
     elif content_type.startswith("multipart/form-data"):
         request_body = req.form
-        request_files = {f.filename: f for f in req.files.getlist("file")}
+        # Files uploaded in a multipart form MIGHT have a filename but WILL have a name.
+        # The filename is optional and self-explanatory.
+        # The name is the name of the form element that it was uploaded for,
+        # and is the key for the MultiDict in req.files.
+        # Micropub expects 'photo', 'video', and 'audio', but no other names.
+        # There may be multiple files uploaded with the same name attribute,
+        # if the <input> element in the HTML form allowed multiple selection.
+        # See /docs/media.md for more details.
+        request_files["photo"] = req.files.getlist("photo")
+        request_files["video"] = req.files.getlist("video")
+        request_files["audio"] = req.files.getlist("audio")
     else:
         raise MicropubInvalidRequestError(f"Invalid 'Content-type': '{content_type}'")
     return (request_body, request_files)
@@ -177,8 +219,22 @@ def process_POST_body(
 def form_body_to_mf2_json(request_body: typing.Dict):
     """Given a request body from a form, return microformats2 json"""
 
-    # Keys in this list are part of our application, not mf2 json, so we ignore them
-    ignored_keys = ["auth_token", "action"]
+    def is_reserved(key):
+        """Return True if form element is reserved by Interpersonal or Micropub
+
+        <https://www.w3.org/TR/micropub/#h-reserved-properties>
+
+        "When creating posts using x-www-form-urlencoded or multipart/form-data requests, all other properties in the request are considered properties of the object being created."
+        """
+        # Micropub requires 'access_token', but I had 'auth_token' erroneously at first
+        reserved_keys = ["auth_token", "access_token", "action", "h", "url"]
+        reserved_prefixes = ["mp-"]
+        if key in reserved_keys:
+            return True
+        for prefix in reserved_prefixes:
+            if key.startswith(prefix):
+                return True
+        return False
 
     result = {
         "type": ["h-entry"],
@@ -193,7 +249,7 @@ def form_body_to_mf2_json(request_body: typing.Dict):
         # and Request.form.getlist(key) turns those into a single tag with two elements.
         val = [unquote(v) for v in request_body.getlist(key)]
 
-        if key in ignored_keys:
+        if is_reserved(key):
             continue
         elif key == "h":
             result["type"] = val
@@ -216,22 +272,20 @@ def micropub_blog_endpoint_POST(blog_name: str):
     """
     blog = current_app.config["APPCONFIG"].blog(blog_name)
 
+    content_type = request.headers.get("Content-type")
+    if not content_type:
+        raise MicropubInvalidRequestError("No 'Content-type' header")
+    request_body, request_files = process_POST_body(request, content_type)
+
     current_app.logger.debug(
         f"/{blog_name}: all headers before calling authentiate_POST: {request.headers}"
     )
-    verified = authenticate_POST(request, blog)
+    verified = authenticate_POST(request.headers, request_body, blog)
 
     auth_test = request.headers.get("X-Interpersonal-Auth-Test")
     # Check for the header we use in testing, and return a success message
     if auth_test:
         return jsonify({"interpersonal_test_result": "authentication_success"})
-
-    content_type = request.headers.get("Content-type")
-    if not content_type:
-        raise MicropubInvalidRequestError("No 'Content-type' header")
-
-    request_body, request_files = process_POST_body(request, content_type)
-    request_file_names = [n for n in request_files.keys()]
 
     contype_test = request_body.get("interpersonal_content-type_test")
     # Check for the value we use in testing, and return a success message
@@ -240,7 +294,7 @@ def micropub_blog_endpoint_POST(blog_name: str):
             {
                 "interpersonal_test_result": contype_test,
                 "content_type": content_type,
-                "filenames": request_file_names,
+                "uploaded_file_count": len(listflatten(request_files.values())),
             }
         )
 
@@ -250,7 +304,8 @@ def micropub_blog_endpoint_POST(blog_name: str):
     # Ahh yes, the famous CUUD.
     # These are all actions supported by the spec:
     # supported_actions = ["delete", "undelete", "update", "create"]
-    # But I don't support them all right now:
+    # But I don't support them all right now.
+    # TODO: Support delete, undelete, and update actions
     supported_actions = ["create"]
 
     if action not in verified["scopes"]:
@@ -266,11 +321,19 @@ def micropub_blog_endpoint_POST(blog_name: str):
 
         if content_type == "application/json":
             mf2obj = request_body
-        elif (
-            content_type == "application/x-www-form-urlencoded"
-            or content_type.startswith("multipart/form-data")
-        ):
+        elif content_type == "application/x-www-form-urlencoded":
             mf2obj = form_body_to_mf2_json(request_body)
+        elif content_type.startswith("multipart/form-data"):
+            mf2obj = form_body_to_mf2_json(request_body)
+            # Multipart forms may contain attachments
+            # Append these attachments to the mf2 object
+            # We want to append, not replace, the attachments -
+            # if the post includes a photo URI and also some photo uploads,
+            # we need to keep both.
+            for key in request_files:
+                if key not in mf2obj["properties"]:
+                    mf2obj["properties"][key] = []
+                mf2obj["properties"][key] += request_files[key]
         else:
             raise MicropubInvalidRequestError(
                 f"Unhandled 'Content-type': '{content_type}'"

@@ -1,10 +1,11 @@
 import json
+import os.path
 from datetime import datetime
 from urllib.parse import quote, urlencode
 
 from flask.app import Flask
 from flask.testing import FlaskClient
-from werkzeug.datastructures import Headers, MultiDict
+from werkzeug.datastructures import FileStorage, Headers, MultiDict
 
 from tests.conftest import IndieAuthActions, TestConsts
 
@@ -21,7 +22,6 @@ def test_action_create_post_www_form_urlencoded(
         resp = client.post(
             "/micropub/example-blog",
             data={
-                "auth_token": z2btd.btoken,
                 "action": "create",
                 "interpersonal_action_test": actest_value,
             },
@@ -56,7 +56,6 @@ def test_action_create_post_www_form_urlencoded_multi_tag(
         # Useful for the tag[] construction, which is meant to convey a list.
         data = MultiDict(
             [
-                ["auth_token", z2btd.btoken],
                 ["action", "create"],
                 ["tag[]", "tagone"],
                 ["tag[]", "tagtwo"],
@@ -115,7 +114,6 @@ def test_action_create_post_json(
         resp = client.post(
             "/micropub/example-blog",
             json={
-                "auth_token": z2btd.btoken,
                 "action": "create",
                 "type": ["h-entry"],
                 "interpersonal_action_test": actest_value,
@@ -186,7 +184,6 @@ def test_action_create_with_slug(
         postresp = client.post(
             "/micropub/example-blog",
             data={
-                "auth_token": z2btd.btoken,
                 "action": "create",
                 "h": "entry",
                 "content": post_content,
@@ -246,7 +243,6 @@ def test_action_create_without_slug(
         postresp = client.post(
             "/micropub/example-blog",
             data={
-                "auth_token": z2btd.btoken,
                 "action": "create",
                 "h": "entry",
                 "content": post_content,
@@ -307,7 +303,6 @@ def test_action_create_dupe_should_error(
         postresp = client.post(
             "/micropub/example-blog",
             data={
-                "auth_token": z2btd.btoken,
                 "action": "create",
                 "h": "entry",
                 "content": post_content,
@@ -327,7 +322,6 @@ def test_action_create_dupe_should_error(
         post2resp = client.post(
             "/micropub/example-blog",
             data={
-                "auth_token": z2btd.btoken,
                 "action": "create",
                 "h": "entry",
                 "content": post_content,
@@ -376,7 +370,6 @@ def test_action_create_with_photo_from_uri(
         postresp = client.post(
             "/micropub/example-blog",
             data={
-                "auth_token": z2btd.btoken,
                 "action": "create",
                 "h": "entry",
                 "content": post_content,
@@ -562,6 +555,71 @@ def test_action_create_post_json_nested_checkin(
             cprops = checkin["properties"]
             assert cprops["name"][0] == "Los Gorditos"
             assert cprops["locality"][0] == "Portland"
+        except BaseException:
+            print(f"Failing test. Response body: {getresp.data}")
+            raise
+
+
+def test_action_create_post_multipart_form(
+    app: Flask,
+    indieauthfix: IndieAuthActions,
+    client: FlaskClient,
+    testconstsfix: TestConsts,
+):
+    """Content-type of application/x-www-form-urlencoded should parse correctly"""
+    with app.app_context():
+        z2btd = indieauthfix.zero_to_bearer_with_test_data()
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {z2btd.btoken}"
+        slug = "test_action_create_post_multipart_form"
+        posturi = f"{testconstsfix.blog_uri}blog/{slug}"
+
+        img1 = FileStorage(
+            stream=open(testconstsfix.img_jpg_singularity, "rb"),
+            filename=os.path.basename(testconstsfix.img_jpg_singularity),
+            content_type="image/jpeg",
+        )
+        img2_no_name = FileStorage(
+            stream=open(testconstsfix.img_jpg_xeno, "rb"),
+            content_type="image/jpeg",
+        )
+
+        resp = client.post(
+            "/micropub/example-blog",
+            data={
+                "action": "create",
+                "content": "Test content whatever",
+                "slug": slug,
+                "testpic1": img1,
+                "testpic2": img2_no_name,
+            },
+            headers=headers,
+        )
+
+        try:
+            assert resp.status_code == 201
+            assert resp.headers["Location"] == posturi
+        except BaseException:
+            print(f"Failing test. Response body: {resp.data}")
+            raise
+
+        # Test that it is gettable
+        endpoint = "/micropub/example-blog?" + urlencode(
+            {
+                "q": "source",
+                "url": posturi,
+            }
+        )
+        getresp = client.get(
+            endpoint,
+            headers=headers,
+        )
+
+        try:
+            assert getresp.status_code == 200
+            json_data = json.loads(getresp.data)
+            props = json_data["properties"]
+            app.logger.debug(json.dumps(json_data, indent=2))
         except BaseException:
             print(f"Failing test. Response body: {getresp.data}")
             raise

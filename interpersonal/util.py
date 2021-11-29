@@ -103,3 +103,23 @@ class CaseInsensitiveDict(dict):
         for k in list(self.keys()):
             v = super(CaseInsensitiveDict, self).pop(k)
             self.__setitem__(k, v)
+
+
+def listflatten(lists) -> typing.List:
+    """Given a list of lists, return a flattened single list"""
+    return [val for sublist in lists for val in sublist]
+
+
+def extension_from_content_type(content_type: str) -> str:
+    """Given content type like `image/jpeg`, return a file extension like `jpeg`
+
+    The result does not include a dot; it will return "jpeg", not ".jpeg".
+
+    TODO: add comprehensive list of image, video, and audio content types.
+    """
+    known_content_types = {
+        "image/jpeg": "jpeg",
+        "image/png": "png",
+        "image/gif": "gif",
+    }
+    return known_content_types[content_type]

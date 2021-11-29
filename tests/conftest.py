@@ -34,6 +34,11 @@ blogs:
 """
 
 
+def datafile(name):
+    """Build a path for files in ./data/"""
+    return os.path.join(os.path.dirname(__file__), "data", name)
+
+
 class TestConsts:
     login_password = "test-login-password-123X"
     cookie_secret_key = "test-cookie-secret-key-ASDF-1234"
@@ -48,6 +53,10 @@ class TestConsts:
     github_e2e_app_private_key = os.environ.get(
         "INTERPERSONAL_TEST_GITHUB_APP_PRIVATE_KEY"
     )
+
+    img_png_mosaic = datafile("github-ncsa-mosaic.png")
+    img_jpg_singularity = datafile("singularity-room.jpg")
+    img_jpg_xeno = datafile("xenomorph-formal.jpg")
 
 
 @pytest.fixture

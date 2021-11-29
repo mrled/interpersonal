@@ -1,10 +1,15 @@
 """Sites hosted on Github"""
 
+import hashlib
 import re
 import textwrap
 import typing
 
+from werkzeug.datastructures import FileStorage
+from interpersonal.errors import InterpersonalNotFoundError
+
 from interpersonal.sitetypes import base
+from interpersonal.util import extension_from_content_type
 
 
 _example_repo_posts = {
@@ -39,17 +44,32 @@ _example_repo_posts = {
 }
 
 
-class HugoExampleRepo(base.HugoBase):
+class HugoExampleBlog(base.HugoBase):
     """An example blog that looks like a Hugo blog to Interpersonal.
 
     Useful for testing and maybe nothing else.
 
     Includes a couple of example posts.
+
+    Class properties:
+
+    posts:              A dictionary of posts.
+                        The key is the post slug, and the value is raw post content.
+    media:              Media storage if collectmedia=False,
+                        or the media staging area if collectmedia=True.
+                        The key is the media hash,
+                        and the value is a werkzeug.FileStorage object.
+    collectedmedia:     Permanent media storage if collectmedia=True, otherwise unused.
+                        The key is the post URI, and the value is a sub-dict,
+                        where the sub-key is the media hash,
+                        and the sub-value is a werkzeug.FileStorage object.
     """
 
-    def __init__(self, name, uri, slugprefix):
-        self.posts = _example_repo_posts
-        super().__init__(name, uri, slugprefix)
+    def __init__(self, name, uri, slugprefix, collectmedia=False):
+        self.posts: typing.Dict[str, str] = _example_repo_posts
+        self.media: typing.Dict[str, FileStorage] = {}
+        self.collectedmedia: typing.Dict[str, FileStorage] = {}
+        super().__init__(name, uri, slugprefix, collectmedia=collectmedia)
 
     def _get_raw_post_body(self, uri: str) -> str:
         path = re.sub(re.escape(self.baseuri), "", uri)
@@ -61,3 +81,36 @@ class HugoExampleRepo(base.HugoBase):
         ppath = self._post_path(slug)
         self.posts[f"/{ppath}"] = raw_body
         return f"{self.baseuri}{ppath}"
+
+    def _add_media(self, media: typing.List[FileStorage]) -> typing.List[str]:
+        uris = []
+        for item in media:
+            hash = hashlib.sha256(usedforsecurity=False)
+            hash.update(item.stream.read())
+            digest = hash.hexdigest()
+            self.media[digest] = item
+            ext = extension_from_content_type(item.content_type)
+            uris.append(f"{self.baseuri}media/{digest}.{ext}")
+        return uris
+
+    def _collect_media_for_post(self, postslug: str, media: typing.List[str]):
+        if postslug not in self.collectedmedia:
+            self.collectedmedia[postslug] = {}
+        for uri in media:
+
+            # Extract the hash from the URI
+            # Assume URI is like https://example.com/media/asdf1234(...).jpeg
+            # Retrieve the 'asdf1234(...)' segment
+            m = re.search(f"{self.baseuri}media/([a-zA-A0-9]+)\.[a-zA-A0-9]*")
+            key = m.group(1)
+
+            if not key:
+                raise InterpersonalNotFoundError(
+                    f"Could not determine media key from URI {uri}"
+                )
+            if key not in self.media:
+                raise InterpersonalNotFoundError(
+                    f"Media item with key {key} (from URI {uri}) has not been saved"
+                )
+            item = self.media[key]
+            self.collectedmedia[postslug][key] = item

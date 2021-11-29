@@ -35,7 +35,7 @@ def catchall_error_handler(exc: Exception):
     else:
         current_app.logger.exception(exc)
         # estr = "{err}\n{tb}".format(err=str(exc), tb=exc.__traceback__.__annotations__)
-        estr = traceback.format_exception(type(exc), exc, exc.__traceback__)
+        estr = "\n".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         return json_error(500, "Unhandled internal error", estr)
 
 
@@ -74,6 +74,15 @@ class InvalidBearerTokenError(Exception):
 class MissingBearerAuthHeaderError(Exception):
     def __interpersonal_exception_handler__(self):
         return json_error(401, "unauthorized", "Missing Authorization header")
+
+
+class AuthenticationProvidedTwiceError(Exception):
+    def __interpersonal_exception_handler__(self):
+        return json_error(
+            401,
+            "unauthorized",
+            "Authentication was provided both in HTTP headers and request body",
+        )
 
 
 class MissingBearerTokenError(Exception):
@@ -118,3 +127,8 @@ class MicropubDuplicatePostError(Exception):
 
     def __interpersonal_exception_handler__(self):
         return json_error(400, "invalid_request", str(self))
+
+
+class InterpersonalNotFoundError(Exception):
+    def __interpersonal_exception_handler__(self):
+        return json_error(404, "Not found", str(self))

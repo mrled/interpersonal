@@ -5,6 +5,7 @@ import os
 import re
 import typing
 from datetime import date, datetime
+from werkzeug.datastructures import FileStorage
 
 import yaml
 from flask import current_app
@@ -126,15 +127,24 @@ class HugoBase:
 
     TODO: Only built for h-entry at this point
           Not sure what a more general implementation would look like
+
+    name:               The name of the blog.
+    baseuri:            The base URI of the blog, like https://blog.example.com/
+    slugprefix:         Prefix for new post slugs, if any.
+                        E.g. "/posts/" or "/articles" or "/blog".
+                        Leading or trailing slash characters ("/") are stripped.
+    collectmedia:       If true, if a post has media, move that media into the post's directory
+                        after the post is uploaded.
     """
 
-    def __init__(self, name: str, baseuri: str, slugprefix: str):
+    def __init__(
+        self, name: str, baseuri: str, slugprefix: str, collectmedia: bool = False
+    ):
         self.name = name
         self.baseuri = normalize_baseuri(baseuri)
-
-        # slugprefix should never have leading or trailing / so that it's easier to work with.
-        # e.g., a slugprefix of /blog/ should be saved here as simply "blog".
         self.slugprefix = slugprefix.strip("/")
+
+        self.collectmedia = collectmedia
 
     def _uri2indexmd(self, uri) -> str:
         """Map a URI to an index.md in the Hugo source.
@@ -157,7 +167,25 @@ class HugoBase:
         raw_post = self._get_raw_post_body(uri)
         return HugoPostSource.fromstr(raw_post)
 
-    def add_post(self, slug: str, frontmatter: typing.Dict, content: str) -> str:
+    def add_post(
+        self,
+        slug: str,
+        frontmatter: typing.Dict,
+        content: str,
+        media: typing.List[str] = None,
+    ) -> str:
+        """Add a new post
+
+        slug:               The slug for the post
+        frontmatter:        Post frontmatter
+        content:            Post body
+        media:              A list of URIs representing associated media, if any.
+                            If collectmedia is True, this will trigger that behavior.
+
+        Returns the URI for the post.
+        """
+        if media is None:
+            media = []
         post = HugoPostSource(frontmatter, content)
 
         # Return a good error message if the post already exists
@@ -178,15 +206,25 @@ class HugoBase:
         if oldpost is not None:
             raise MicropubDuplicatePostError(uri=posturi)
 
-        return self._add_raw_post_body(slug, post.tostr())
+        result = self._add_raw_post_body(slug, post.tostr())
+
+        if media and self.collectmedia:
+            self._collect_media_for_post(slug, media)
+
+        return result
 
     def add_post_mf2(self, mf2obj: typing.Dict):
-        """Add a post from a microfotmats2 json object"""
+        """Add a post from a microfotmats2 json object
+
+        Microformats2 keeps things a little different than a Hugo blog expects,
+        so we process it for Hugo first.
+        """
         content = ""
         frontmatter = {}
         slug = ""
         name = ""
-        for k, v in mf2obj["properties"].items():
+        props = mf2obj["properties"]
+        for k, v in props.items():
             if k == "content":
                 if len(v) > 1:
                     raise MicropubInvalidRequestError(
@@ -218,9 +256,22 @@ class HugoBase:
                 frontmatter[k] = v
         if not slug:
             slug = slugify(name or content)
-        if "date" not in mf2obj["properties"]:
+        if "date" not in props:
             frontmatter["date"] = datetime.utcnow().strftime("%Y-%m-%d")
-        return self.add_post(slug, frontmatter, content)
+
+        media = []
+        media += props.get("photo") or []
+        media += props.get("video") or []
+        media += props.get("audio") or []
+
+        return self.add_post(slug, frontmatter, content, media)
+
+    def add_media(self, media: typing.List[FileStorage]) -> str:
+        """Add one or more media files.
+
+        media:      A list of werkzeug FileStorage objects
+        """
+        return self._add_media(media)
 
     def _post_path(self, slug: str) -> str:
         """Given a slug of a post, return the full path.
@@ -238,5 +289,56 @@ class HugoBase:
         """Given the slug of a post, return the full URI"""
         return f"{self.baseuri}{self._post_path(slug)}"
 
-    def _add_raw_post_body(self, slug: str, raw_body: str):
+    def _add_raw_post_body(self, slug: str, raw_body: str) -> str:
+        """Given a raw string representing the post file body, save it to the backend
+
+        Must be implemented by a subclass.
+
+        Must return the URI of the post.
+        """
+        raise NotImplementedError("Please implement this in the subclass")
+
+    def _add_media(self, media: typing.List[FileStorage]) -> str:
+        """Add media.
+
+        Must be implemented by a subclass.
+
+        Returns a URI to the stored location of the media.
+
+        Blogs may save the media to this location permanently,
+        or may move it to a new location once the corresponding post is submitted.
+        Blogs with a separate media directory like /static/media/ would do the former,
+        and posts would reference this by absolute path.
+
+        Blogs wanting to keep a post's related media in its own folder would do the latter,
+        and posts would reference media by relative path.
+        These blogs should set collectmedia to True,
+        and also implement the _collect_media_for_post() method (see below).
+        """
+        raise NotImplementedError("Please implement this in the subclass")
+
+    def _collect_media_for_post(self, postslug: str, media: typing.List[str]):
+        """Collect media for a post into the post's directory
+
+        For blogs that want to keep a post's related media in its own folder,
+        this must be implemented in a subclass.
+        For blogs that save to the _add_media() location permanently,
+        implementing this is not required.
+
+        When the media endpoint is used, media is uploaded BEFORE a blog post is submitted.
+        This means that at media upload time, we don't know anything about the post it is for.
+        This method is called, if it is implemented, after the post is submitted.
+        To implement it, move/rename the media from the temporary media storage location
+        to the permanent location relative to the blog post.
+
+        Blogs implementing this should pass collectmedia=True when they are instantiated.
+
+        postslug:       The slug of the post, after it has been submitted.
+        media:          A list of URIs to media as returned from _add_media().
+                        Implementations must know how to convert those URLs to the real location;
+                        e.g. a Github backend must know how to convert a raw.githubusercontent...
+                        URI into a relative path for the proper repository.
+
+        Returns None
+        """
         raise NotImplementedError("Please implement this in the subclass")

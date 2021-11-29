@@ -189,6 +189,7 @@ class HugoGithubRepo(base.HugoBase):
         repo: str,
         github_app_id: str,
         private_key_pem: str,
+        collectmedia=False,
     ):
         self.owner = owner
         self.repo = repo
@@ -196,7 +197,7 @@ class HugoGithubRepo(base.HugoBase):
         ghapp_jwt = GithubAppJwt(private_key_pem, github_app_id)
         self.ghappapi = GithubApiAppJwtAuth(ghapp_jwt)
 
-        super().__init__(name, uri, slugprefix)
+        super().__init__(name, uri, slugprefix, collectmedia)
 
     def _logged_api(self, *args, **kwargs):
         """Call self.api, logging parameters and results"""

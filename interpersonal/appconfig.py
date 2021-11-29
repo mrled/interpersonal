@@ -32,7 +32,7 @@ class AppConfig:
         blogs: typing.List[HugoBase] = []
         for yamlblog in yamlcontents["blogs"]:
             if yamlblog["type"] == "built-in example":
-                blog = example.HugoExampleRepo(
+                blog = example.HugoExampleBlog(
                     yamlblog["name"], yamlblog["uri"], yamlblog["slugprefix"]
                 )
             elif yamlblog["type"] == "github":

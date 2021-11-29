@@ -131,7 +131,6 @@ def test_e2e_github_microblog_create_post(
         resp = client.post(
             f"/micropub/{testconstsfix.github_e2e_blog_name}",
             data={
-                "auth_token": z2btd.btoken,
                 "action": "create",
                 "h": "entry",
                 "content": post_content,
