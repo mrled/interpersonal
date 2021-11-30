@@ -479,3 +479,89 @@ def test_action_create_post_json_html_content(
 
 # TODO: test that content NOT wrapped in {"html": "content here"} IS escaped
 # ... maybe I just want the static site engine to handle that? Hmm.
+
+
+def test_action_create_post_json_nested_checkin(
+    app: Flask,
+    indieauthfix: IndieAuthActions,
+    client: FlaskClient,
+    testconstsfix: TestConsts,
+):
+    """Accept a nested mf2 object - a checkin
+
+    Based on micropub.rocks 204: "Create an h-entry post with a nested object (JSON)"
+    """
+    with app.app_context():
+        z2btd = indieauthfix.zero_to_bearer_with_test_data()
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {z2btd.btoken}"
+        slug = "test_action_create_post_json_nested_checkin"
+        posturi = f"{testconstsfix.blog_uri}blog/{slug}"
+        content = "Checking in to this place on Fourwalla, the original checkin app"
+        resp = client.post(
+            "/micropub/example-blog",
+            json={
+                "type": ["h-entry"],
+                "properties": {
+                    "content": [content],
+                    "slug": [slug],
+                    "checkin": [
+                        {
+                            "type": ["h-card"],
+                            "properties": {
+                                "name": ["Los Gorditos"],
+                                "url": [
+                                    "https://foursquare.com/v/502c4bbde4b06e61e06d1ebf"
+                                ],
+                                "latitude": [45.524330801154],
+                                "longitude": [-122.68068808051],
+                                "street-address": ["922 NW Davis St"],
+                                "locality": ["Portland"],
+                                "region": ["OR"],
+                                "country-name": ["United States"],
+                                "postal-code": ["97209"],
+                            },
+                        }
+                    ],
+                },
+            },
+            headers=headers,
+        )
+
+        try:
+            assert resp.status_code == 201
+            assert resp.headers["Location"] == posturi
+        except BaseException:
+            print(f"Failing test. Response body: {resp.data}")
+            raise
+
+        # Retrieve the post, make sure our HTML was not escaped
+        endpoint = "/micropub/example-blog?" + urlencode(
+            {
+                "q": "source",
+                "url": posturi,
+            }
+        )
+        getresp = client.get(
+            endpoint,
+            headers=headers,
+        )
+
+        try:
+            assert getresp.status_code == 200
+            json_data = json.loads(getresp.data)
+            props = json_data["properties"]
+            pubdate = datetime.strptime(props["published"][0], "%Y-%m-%dT%H:%M:%S")
+            now = datetime.utcnow()
+            assert pubdate.strftime("%Y-%m-%d") == now.strftime("%Y-%m-%d")
+            retrvd_content = props["content"][0]["markdown"].strip()
+            assert retrvd_content == content
+            assert "checkin" in props
+            checkin = props["checkin"][0]
+            assert checkin["type"][0] == "h-card"
+            cprops = checkin["properties"]
+            assert cprops["name"][0] == "Los Gorditos"
+            assert cprops["locality"][0] == "Portland"
+        except BaseException:
+            print(f"Failing test. Response body: {getresp.data}")
+            raise
