@@ -416,3 +416,66 @@ def test_action_create_with_photo_from_uri(
         except BaseException:
             print(f"Failing test. Response body: {getresp.data}")
             raise
+
+
+def test_action_create_post_json_html_content(
+    app: Flask,
+    indieauthfix: IndieAuthActions,
+    client: FlaskClient,
+    testconstsfix: TestConsts,
+):
+    """Test HTML content that should not be escaped"""
+    with app.app_context():
+        z2btd = indieauthfix.zero_to_bearer_with_test_data()
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {z2btd.btoken}"
+        slug = "test_action_create_post_json_html_content"
+        posturi = f"{testconstsfix.blog_uri}blog/{slug}"
+        html_post_content = "testing <b>html content</b>, nice!"
+        resp = client.post(
+            "/micropub/example-blog",
+            json={
+                "type": ["h-entry"],
+                "properties": {
+                    "content": [{"html": html_post_content}],
+                    "slug": [slug],
+                },
+            },
+            headers=headers,
+        )
+
+        try:
+            assert resp.status_code == 201
+            assert resp.headers["Location"] == posturi
+        except BaseException:
+            print(f"Failing test. Response body: {resp.data}")
+            raise
+
+        # Retrieve the post, make sure our HTML was not escaped
+        endpoint = "/micropub/example-blog?" + urlencode(
+            {
+                "q": "source",
+                "url": posturi,
+            }
+        )
+        getresp = client.get(
+            endpoint,
+            headers=headers,
+        )
+
+        try:
+            assert getresp.status_code == 200
+            json_data = json.loads(getresp.data)
+            props = json_data["properties"]
+            pubdate = datetime.strptime(props["published"][0], "%Y-%m-%dT%H:%M:%S")
+            now = datetime.utcnow()
+            assert pubdate.strftime("%Y-%m-%d") == now.strftime("%Y-%m-%d")
+            retrvd_content = props["content"][0]["markdown"].strip()
+            assert retrvd_content == html_post_content
+        except BaseException:
+            print(f"Failing test. Response body: {getresp.data}")
+            raise
+
+
+# TODO: test that content NOT wrapped in {"html": "content here"} IS escaped
+# ... maybe I just want the static site engine to handle that? Hmm.

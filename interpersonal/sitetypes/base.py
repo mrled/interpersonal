@@ -9,7 +9,7 @@ from datetime import date, datetime
 import yaml
 from flask import current_app
 
-from interpersonal.errors import MicropubDuplicatePostError
+from interpersonal.errors import MicropubDuplicatePostError, MicropubInvalidRequestError
 from interpersonal.util import CaseInsensitiveDict
 
 
@@ -188,7 +188,27 @@ class HugoBase:
         name = ""
         for k, v in mf2obj["properties"].items():
             if k == "content":
-                content = v[0]
+                if len(v) > 1:
+                    raise MicropubInvalidRequestError(
+                        "Unexpectedly multiple values in content list"
+                    )
+                unwrappedv = v[0]
+                if type(unwrappedv) is dict:
+                    if len(unwrappedv) > 1:
+                        raise MicropubInvalidRequestError(
+                            "Unexpectedly multiple values in content dict"
+                        )
+                    ctype, cval = list(unwrappedv.items())[0]
+                    if ctype == "html":
+                        content = cval
+                    elif ctype == "markdown":
+                        content = cval
+                    else:
+                        raise MicropubInvalidRequestError(
+                            f"Unexpected content type {ctype}"
+                        )
+                else:
+                    content = unwrappedv
             elif k == "slug":
                 slug = v[0]
             elif k == "name":
