@@ -172,9 +172,9 @@ class HugoBase:
             oldpost = self.get_post(posturi)
         except BaseException as exc:
             current_app.logger.debug(
-                f"Could not .get_post({posturi}) due to error '{exc}'. Assuming this is correct and moving on..."
+                f"Could not .get_post({posturi}) due to error '{exc}'. Assuming this is correct and moving on...",
+                exc_info=exc,
             )
-            current_app.logger.exception(exc)
         if oldpost is not None:
             raise MicropubDuplicatePostError(uri=posturi)
 

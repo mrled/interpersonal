@@ -8,6 +8,7 @@ import datetime
 import json
 import re
 import typing
+from urllib.parse import unquote
 
 from flask import (
     Blueprint,
@@ -183,25 +184,26 @@ def form_body_to_mf2_json(request_body: typing.Dict):
         "type": ["h-entry"],
         "properties": {},
     }
-    for k in request_body:
+    for key in request_body:
 
-        # Note that v is now a list, possibly of just a single item, not a scalar
-        # Note that mf2 uses lists for many things, so this is actually fine
-        v = request_body.getlist(k)
+        # val is a list, possibly of just a single item, not a scalar.
+        # mf2 uses lists for many things, even that will just have a single value
+        # like the post name, so this is actually fine.
+        # Form convention is that a list is made like this: ?tag[]=tag1&tag[]=tag2,
+        # and Request.form.getlist(key) turns those into a single tag with two elements.
+        val = [unquote(v) for v in request_body.getlist(key)]
 
-        if k in ignored_keys:
+        if key in ignored_keys:
             continue
-        elif k == "h":
-            result["type"] = v
-        elif k.endswith("[]"):
-            # Form convention is that a list is made like this:
-            # ?tag[]=tag1&tag[]=tag2
-            # Handle that here
-            propname = k[0:-2]
-            if propname not in result["properties"]:
-                result["properties"][propname] = v
+        elif key == "h":
+            result["type"] = val
+        elif key.endswith("[]"):
+            # If a key ends with [], strip it off.
+            # As previously mentioned, this is the convention for list items in a form.
+            propname = key[0:-2]
+            result["properties"][propname] = val
         else:
-            result["properties"][k] = v
+            result["properties"][key] = val
 
     return result
 
