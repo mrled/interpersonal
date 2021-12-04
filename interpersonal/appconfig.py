@@ -33,15 +33,20 @@ class AppConfig:
         for yamlblog in yamlcontents["blogs"]:
             if yamlblog["type"] == "built-in example":
                 blog = example.HugoExampleBlog(
-                    yamlblog["name"], yamlblog["uri"], yamlblog["slugprefix"]
+                    yamlblog["name"],
+                    yamlblog["uri"],
+                    yamlblog["slugprefix"],
+                    yamlblog["mediaprefix"],
                 )
             elif yamlblog["type"] == "github":
                 blog = github.HugoGithubRepo(
                     yamlblog["name"],
                     yamlblog["uri"],
                     yamlblog["slugprefix"],
+                    yamlblog["mediaprefix"],
                     yamlblog["github_owner"],
                     yamlblog["github_repo"],
+                    yamlblog["github_repo_branch"],
                     yamlblog["github_app_id"],
                     yamlblog["github_app_private_key"],
                 )

@@ -1,17 +1,20 @@
 """The base class for Hugo blogs"""
 
 import copy
+from dataclasses import dataclass
+import hashlib
 import os
 import re
 import typing
 from datetime import date, datetime
-from werkzeug.datastructures import FileStorage
 
 import yaml
 from flask import current_app
+from werkzeug.datastructures import FileStorage
+from werkzeug.utils import secure_filename
 
 from interpersonal.errors import MicropubDuplicatePostError, MicropubInvalidRequestError
-from interpersonal.util import CaseInsensitiveDict
+from interpersonal.util import CaseInsensitiveDict, extension_from_content_type
 
 
 def slugify(text: str) -> str:
@@ -117,6 +120,14 @@ class HugoPostSource:
         return {"properties": props}
 
 
+@dataclass
+class HugoDirectories:
+    """Directories used by Hugo"""
+
+    content: str
+    static: str
+
+
 class HugoBase:
     """Base class for a Hugo blog
 
@@ -133,18 +144,27 @@ class HugoBase:
     slugprefix:         Prefix for new post slugs, if any.
                         E.g. "/posts/" or "/articles" or "/blog".
                         Leading or trailing slash characters ("/") are stripped.
+    mediaprefix:        Prefix for blog media.
+                        E.g. "/media/" or "/uploads".
+                        Leading or trailing slash characters ("/") are stripped.
     collectmedia:       If true, if a post has media, move that media into the post's directory
                         after the post is uploaded.
     """
 
     def __init__(
-        self, name: str, baseuri: str, slugprefix: str, collectmedia: bool = False
+        self,
+        name: str,
+        baseuri: str,
+        slugprefix: str,
+        mediaprefix: str,
+        collectmedia: bool = False,
     ):
         self.name = name
         self.baseuri = normalize_baseuri(baseuri)
         self.slugprefix = slugprefix.strip("/")
-
+        self.mediaprefix = mediaprefix.strip("/")
         self.collectmedia = collectmedia
+        self.dirs = HugoDirectories("content", "static")
 
     def _uri2indexmd(self, uri) -> str:
         """Map a URI to an index.md in the Hugo source.
@@ -209,7 +229,7 @@ class HugoBase:
         result = self._add_raw_post_body(slug, post.tostr())
 
         if media and self.collectmedia:
-            self._collect_media_for_post(slug, media)
+            self._collect_media_for_post(slug, post.tostr(), media)
 
         return result
 
@@ -317,7 +337,9 @@ class HugoBase:
         """
         raise NotImplementedError("Please implement this in the subclass")
 
-    def _collect_media_for_post(self, postslug: str, media: typing.List[str]):
+    def _collect_media_for_post(
+        self, postslug: str, postbody: str, media: typing.List[str]
+    ):
         """Collect media for a post into the post's directory
 
         For blogs that want to keep a post's related media in its own folder,
@@ -334,6 +356,8 @@ class HugoBase:
         Blogs implementing this should pass collectmedia=True when they are instantiated.
 
         postslug:       The slug of the post, after it has been submitted.
+        postbody:       The raw string body of the post.
+                        This is the raw representation of the post, including frontmatter etc.
         media:          A list of URIs to media as returned from _add_media().
                         Implementations must know how to convert those URLs to the real location;
                         e.g. a Github backend must know how to convert a raw.githubusercontent...
@@ -342,3 +366,35 @@ class HugoBase:
         Returns None
         """
         raise NotImplementedError("Please implement this in the subclass")
+
+    def _media_item_hash(self, media_item: FileStorage) -> str:
+        """Calculate the hash of a media storage object."""
+        hash = hashlib.sha256(usedforsecurity=False)
+        hash.update(media_item.stream.read())
+        digest = hash.hexdigest()
+        return digest
+
+    def _media_item_filename(self, media_item: FileStorage) -> str:
+        """Get the filename to use when storing a media item"""
+        if media_item.filename:
+            basename = secure_filename(
+                os.path.splitext(os.path.basename(media_item.filename))[0]
+            )
+        else:
+            basename = "item"
+        # E.g. an image with a .jpg extension will be saved with the .jpeg extension.
+        ext = extension_from_content_type(media_item.content_type)
+        return f"{basename}.{ext}"
+
+    def _media_item_uri(self, media_item: FileStorage, digest: str = "") -> str:
+        """Get the URI for a media item.
+
+        media_item:     An uploaded media item
+        digest:         The sha256 digest of the item, calculated if empty
+        """
+        if not digest:
+            digest = self._media_item_hash(media_item)
+        filename = self._media_item_filename(media_item)
+
+        uri = f"{self.baseuri}{self.mediaprefix}/{digest}/{filename}"
+        return uri

@@ -44,7 +44,8 @@ def create_app(
     try:
         appconfig = AppConfig.fromyaml(configpath)
     except BaseException as exc:
-        raise Exception(f"Error loading interpersonal configuration file: {exc}")
+        print(f"ERROR! loading interpersonal configuration file: {exc}")
+        raise
 
     app = Flask(__name__, instance_relative_config=True)
 

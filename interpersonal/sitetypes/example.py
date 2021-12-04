@@ -1,13 +1,15 @@
 """Sites hosted on Github"""
 
 import hashlib
+import os.path
 import re
 import textwrap
 import typing
 
 from werkzeug.datastructures import FileStorage
-from interpersonal.errors import InterpersonalNotFoundError
+from werkzeug.utils import secure_filename
 
+from interpersonal.errors import InterpersonalNotFoundError
 from interpersonal.sitetypes import base
 from interpersonal.util import extension_from_content_type
 
@@ -65,11 +67,11 @@ class HugoExampleBlog(base.HugoBase):
                         and the sub-value is a werkzeug.FileStorage object.
     """
 
-    def __init__(self, name, uri, slugprefix, collectmedia=False):
+    def __init__(self, name, uri, slugprefix, mediaprefix, collectmedia=False):
         self.posts: typing.Dict[str, str] = _example_repo_posts
         self.media: typing.Dict[str, FileStorage] = {}
         self.collectedmedia: typing.Dict[str, FileStorage] = {}
-        super().__init__(name, uri, slugprefix, collectmedia=collectmedia)
+        super().__init__(name, uri, slugprefix, mediaprefix, collectmedia=collectmedia)
 
     def _get_raw_post_body(self, uri: str) -> str:
         path = re.sub(re.escape(self.baseuri), "", uri)
@@ -85,32 +87,22 @@ class HugoExampleBlog(base.HugoBase):
     def _add_media(self, media: typing.List[FileStorage]) -> typing.List[str]:
         uris = []
         for item in media:
-            hash = hashlib.sha256(usedforsecurity=False)
-            hash.update(item.stream.read())
-            digest = hash.hexdigest()
-            self.media[digest] = item
-            ext = extension_from_content_type(item.content_type)
-            uris.append(f"{self.baseuri}media/{digest}.{ext}")
+            uri = self._media_item_uri(item)
+            self.media[uri] = item
+            uris.append(uri)
         return uris
 
-    def _collect_media_for_post(self, postslug: str, media: typing.List[str]):
+    def _collect_media_for_post(
+        self, postslug: str, postbody: str, media: typing.List[str]
+    ):
+        # TODO: update the post body with the new image URIs
         if postslug not in self.collectedmedia:
             self.collectedmedia[postslug] = {}
         for uri in media:
 
-            # Extract the hash from the URI
-            # Assume URI is like https://example.com/media/asdf1234(...).jpeg
-            # Retrieve the 'asdf1234(...)' segment
-            m = re.search(f"{self.baseuri}media/([a-zA-A0-9]+)\.[a-zA-A0-9]*")
-            key = m.group(1)
-
-            if not key:
+            if uri not in self.media:
                 raise InterpersonalNotFoundError(
-                    f"Could not determine media key from URI {uri}"
+                    f"Media item from URI {uri} has not been saved"
                 )
-            if key not in self.media:
-                raise InterpersonalNotFoundError(
-                    f"Media item with key {key} (from URI {uri}) has not been saved"
-                )
-            item = self.media[key]
-            self.collectedmedia[postslug][key] = item
+            item = self.media[uri]
+            self.collectedmedia[postslug][uri] = item

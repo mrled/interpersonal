@@ -27,6 +27,7 @@ def test_config():
           type: built-in example
           uri: http://whatever.example.net
           slugprefix: /blog
+          mediaprefix: /media
         """
     )
 

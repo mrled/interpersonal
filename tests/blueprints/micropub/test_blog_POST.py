@@ -96,17 +96,28 @@ def test_auth_in_form(app: Flask, indieauthfix: IndieAuthActions, client: FlaskC
         )
 
 
-# def test_json_body_authentication(
-#     app: Flask,
-#     indieauthfix: IndieAuthActions,
-#     client: FlaskClient,
-#     testconstsfix: TestConsts,
-# ):
-#     """POST request with JSON body should auth with access token in body as JSON property
-#
-#     TODO: Implement me
-#     """
-#     raise NotImplementedError
+def test_json_body_authentication(
+    app: Flask,
+    indieauthfix: IndieAuthActions,
+    client: FlaskClient,
+    testconstsfix: TestConsts,
+):
+    """POST request with JSON body should not auth with access token in body as JSON property"""
+    with app.app_context():
+        z2btd = indieauthfix.zero_to_bearer_with_test_data()
+        headers = Headers()
+        headers["X-Interpersonal-Auth-Test"] = "yes"
+
+        resp = client.post(
+            "/micropub/example-blog",
+            json={"access_token": z2btd.btoken},
+            headers=headers,
+        )
+
+        assert resp.status_code == 401
+        respjson = json.loads(resp.data)
+        assert respjson["error"] == "unauthorized"
+        assert respjson["error_description"] == "Missing Authorization header"
 
 
 def test_missing_content_type_fails(
@@ -199,18 +210,6 @@ def test_content_type_multipart_form(
         io.BytesIO("test file contents TWO".encode("utf8")),
         "test_2.txt",
     )
-    img1_jpg = FileStorage(
-        stream=open(testconstsfix.img_jpg_singularity, "rb"),
-        filename=os.path.basename(testconstsfix.img_jpg_singularity),
-        content_type="image/jpeg",
-    )
-    img2_jpg_no_name = FileStorage(
-        stream=open(testconstsfix.img_jpg_xeno, "rb"),
-        content_type="image/jpeg",
-    )
-    img3_png = FileStorage(
-        stream=open(testconstsfix.img_png_mosaic, "rb"), content_type="image/png"
-    )
 
     with app.app_context():
         z2btd = indieauthfix.zero_to_bearer_with_test_data()
@@ -223,7 +222,11 @@ def test_content_type_multipart_form(
             data={
                 "interpersonal_content-type_test": contype_test_value,
                 "file": [test_file_data_1, test_file_data_2],
-                "photo": [img1_jpg, img2_jpg_no_name, img3_png],
+                "photo": [
+                    testconstsfix.img_sing.fstor(),
+                    testconstsfix.img_xeno.fstor(),
+                    testconstsfix.img_mosaic.fstor(),
+                ],
             },
             headers=headers,
         )
@@ -239,9 +242,6 @@ def test_content_type_multipart_form(
         except BaseException:
             print(f"Failing test. Response body: {resp.data}")
             raise
-
-
-## TODO: Test that video and audio uploads work too
 
 
 def test_scope_invalid(app: Flask, indieauthfix: IndieAuthActions, client: FlaskClient):

@@ -146,8 +146,6 @@ def authenticate_POST(
     POST requetss can be authenticated by either an auth token header or an
     auth token in the submitted form.
 
-
-
     TODO: Match OAuth Bearer Token RFC more closely
         Look for "access_token" in this document
         <https://datatracker.ietf.org/doc/html/rfc6750>
@@ -157,10 +155,11 @@ def authenticate_POST(
         That RFC is constrained more than we are here, should fix.
     """
     current_app.logger.debug(f"authenticate_POST: all headers: {req_headers}")
-    form_encoded = req_headers.get("Content-type") in [
-        "application/x-www-form-urlencoded",
-        "multipart/form-data",
-    ]
+    content_type = req_headers.get("Content-type")
+    form_encoded = (
+        content_type == "application/x-www-form-urlencoded"
+        or content_type.startswith("multipart/form-data")
+    )
     body_access_token = processed_req_body.get("access_token")
 
     if req_headers.get("Authorization") and body_access_token:
@@ -269,8 +268,15 @@ def micropub_blog_endpoint_POST(blog_name: str):
     """The POST verb for the micropub blog route
 
     Used by clients to change content (CRUD operations on posts)
+
+    If this is a multipart/form-data request,
+    note that the multiple media items can be uploaded in one request,
+    and they should be sent with a `name` of either `photo`, `video`, or `audio`.
+    (multipart/form-data POST requests can send more than one attachment with the same `name`.)
+    This is in contrast to the media endpoint,
+    which expects a single item with a `name` of simply `file`.
     """
-    blog = current_app.config["APPCONFIG"].blog(blog_name)
+    blog: HugoBase = current_app.config["APPCONFIG"].blog(blog_name)
 
     content_type = request.headers.get("Content-type")
     if not content_type:
@@ -324,16 +330,23 @@ def micropub_blog_endpoint_POST(blog_name: str):
         elif content_type == "application/x-www-form-urlencoded":
             mf2obj = form_body_to_mf2_json(request_body)
         elif content_type.startswith("multipart/form-data"):
+
             mf2obj = form_body_to_mf2_json(request_body)
-            # Multipart forms may contain attachments
-            # Append these attachments to the mf2 object
+
+            # Multipart forms contain attachments.
+            # Upload the attachments, then append the URIs to the mf2 object.
             # We want to append, not replace, the attachments -
             # if the post includes a photo URI and also some photo uploads,
             # we need to keep both.
-            for key in request_files:
-                if key not in mf2obj["properties"]:
-                    mf2obj["properties"][key] = []
-                mf2obj["properties"][key] += request_files[key]
+            # (Not sure if that actually happens out in the wild, but maybe?)
+            # mtype will be one of 'photo', 'video', 'audio'.
+            for mtype in request_files:
+                mitem = request_files[mtype]
+                newly_added_media_uris = blog.add_media(mitem)
+                if mtype not in mf2obj["properties"]:
+                    mf2obj["properties"][mtype] = []
+                mf2obj["properties"][mtype] += newly_added_media_uris
+
         else:
             raise MicropubInvalidRequestError(
                 f"Unhandled 'Content-type': '{content_type}'"
@@ -350,11 +363,38 @@ def micropub_blog_endpoint_POST(blog_name: str):
         return json_error(500, f"Unhandled action '{action}'")
 
 
-@bp.route("/<blog_name>/media")
-@indieauth_required(ALL_HTTP_METHODS)
+@bp.route("/<blog_name>/media", methods=["POST"])
 def micropub_blog_media(blog_name):
-    """The per-blog media endpoint"""
-    raise NotImplementedError
+    """The per-blog media endpoint
+
+    Expects a multipart/form-data request with a single attachment with a name of `file`.
+    Contrast with a multipart/form-data requiest of the main POST endpoint,
+    which accepts attachments with a name of `photo`, `video`, or `audio`.
+    """
+    blog: HugoBase = current_app.config["APPCONFIG"].blog(blog_name)
+
+    content_type = request.headers.get("Content-type")
+    if not content_type:
+        raise MicropubInvalidRequestError("No 'Content-type' header")
+    if not content_type.startswith("multipart/form-data"):
+        raise MicropubInvalidRequestError(
+            f"Invalid Content-type: {content_type}; only 'multipart/form-data' is supported for this endpoint."
+        )
+
+    verified = authenticate_POST(request.headers, request.form, blog)
+    if "media" not in verified["scopes"]:
+        raise MicropubInsufficientScopeError("media")
+
+    files = request.files.getlist("file")
+    if len(files) != 1:
+        raise MicropubInvalidRequestError(
+            f"Exactly one file can be submitted at a time, but this request has {len(files)} files"
+        )
+    new_media_uri = blog.add_media(files)[0]
+    resp = Response("")
+    resp.headers["Location"] = new_media_uri
+    resp.status_code = 201
+    return resp
 
 
 @bp.route("/authorized/github")
