@@ -37,6 +37,7 @@ class AppConfig:
                     yamlblog["uri"],
                     yamlblog["slugprefix"],
                     yamlblog["mediaprefix"],
+                    collectmedia=yamlblog.get("collectmedia"),
                 )
             elif yamlblog["type"] == "github":
                 blog = github.HugoGithubRepo(
@@ -49,6 +50,7 @@ class AppConfig:
                     yamlblog["github_repo_branch"],
                     yamlblog["github_app_id"],
                     yamlblog["github_app_private_key"],
+                    collectmedia=yamlblog.get("collectmedia"),
                 )
             else:
                 raise Exception(f"Unknown blog type {yamlblog['type']}")

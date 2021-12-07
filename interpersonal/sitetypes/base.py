@@ -45,6 +45,19 @@ def normalize_baseuri(baseuri: str) -> str:
     return baseuri
 
 
+@dataclass
+class AddedMediaItem:
+    """A media item added to the blog
+
+    uri:        The URI that it is reachable at
+    created:    True if just created (HTTP code should be 201),
+                False if it already existed and was not reuploaded (HTTP code 200)
+    """
+
+    uri: str
+    created: bool
+
+
 class HugoPostSource:
     def __init__(self, frontmatter: dict, content: str):
         self.frontmatter = frontmatter
@@ -286,7 +299,7 @@ class HugoBase:
 
         return self.add_post(slug, frontmatter, content, media)
 
-    def add_media(self, media: typing.List[FileStorage]) -> str:
+    def add_media(self, media: typing.List[FileStorage]) -> typing.List[AddedMediaItem]:
         """Add one or more media files.
 
         media:      A list of werkzeug FileStorage objects

@@ -79,7 +79,7 @@ def test_action_create_with_photo_from_uri(
             raise
 
 
-def test_action_create_post_multipart_form(
+def test_action_create_post_multipart_form_with_two_files(
     app: Flask,
     indieauthfix: IndieAuthActions,
     client: FlaskClient,

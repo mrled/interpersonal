@@ -5,15 +5,15 @@ import json
 import re
 import time
 import typing
-from dataclasses import dataclass
 from datetime import datetime
+from urllib.parse import quote_plus
 
 import jwt
 import requests
 from flask import current_app
 from ghapi.all import GhApi
+from requests.models import HTTPError
 from werkzeug.datastructures import FileStorage
-from interpersonal.errors import InterpersonalNotFoundError
 
 from interpersonal.sitetypes import base
 
@@ -238,7 +238,11 @@ class HugoGithubRepo(base.HugoBase):
             # Try to find them ourselves here
             # <https://github.com/fastai/ghapi/issues/79>
             try:
-                result_body = json.loads(exc.fp.read())
+
+                # Reminder: you can only call .read() once, and there is no .seek()
+                exc_fp_data = exc.fp.read()
+
+                result_body = json.loads(exc_fp_data)
                 current_app.logger.debug(f"Result body from github: {result_body}")
             except BaseException as inner_exc:
                 current_app.logger.debug(
@@ -276,29 +280,104 @@ class HugoGithubRepo(base.HugoBase):
         )
         return f"{self.baseuri}{ppath}"
 
-    def _add_media(self, media: typing.List[FileStorage]) -> typing.List[str]:
-        uris = []
+    def _add_media(
+        self, media: typing.List[FileStorage]
+    ) -> typing.List[base.AddedMediaItem]:
+        items: typing.List[base.AddedMediaItem] = []
         for item in media:
             digest = self._media_item_hash(item)
             filename = self._media_item_filename(item)
             relpath = f"{self.mediadir}/{digest}/{filename}"
-            resp = self._logged_api(
+
+            # TODO: are githubusercontent.com URIs going to work well?
+            uploaded_uri = f"https://raw.githubusercontent.com/{self.owner}/{self.repo}/{self.branch}/content/{relpath}"
+
+            try:
+                get_resp = self._logged_api(
+                    r"/repos/{owner}/{repo}/contents/{path}",
+                    "GET",
+                    route=dict(owner=self.owner, repo=self.repo, path=relpath),
+                )
+                current_app.logger.debug(
+                    f"Media already exists at {relpath}, nothing to do..."
+                )
+                items.append(base.AddedMediaItem(uploaded_uri, False))
+                continue
+
+            except BaseException as exc:
+                try:
+                    statuscode = int(exc.status)
+                except BaseException as inner_exc:
+                    statuscode = None
+                if statuscode != 404:
+                    current_app.logger.error(
+                        f"Unhandled error trying to talk to github, re-raising..."
+                    )
+                    raise
+                current_app.logger.debug(
+                    f"Media does not yet exist at {relpath}, will upload..."
+                )
+
+            put_resp = self._logged_api(
                 r"/repos/{owner}/{repo}/contents/{path}",
                 "PUT",
                 route=dict(owner=self.owner, repo=self.repo, path=relpath),
                 data=dict(
-                    message=f"Adding media item {relpath}",
+                    message=f"Add media item {relpath}",
                     content=base64.b64encode(item.read()).decode(),
                 ),
             )
-            # TODO: are githubusercontent.com URIs going to work well?
-            uri = f"https://raw.githubusercontent.com/{self.owner}/{self.repo}/{self.branch}/content/{relpath}"
-            uris.append(uri)
-        return uris
+
+            items.append(base.AddedMediaItem(uploaded_uri, True))
+        return items
+
+    def _delete_media(self, uris: typing.List[str]):
+        """Delete media from the server.
+
+        Not required for the implementation, but useful for e2e tests.
+
+        Assumes URIs are raw.githubusercontent.com URIs - NOT final published content URIs!
+        Again, this is really just for testing.
+        """
+        for uri in uris:
+            esc_uri_prefix = re.escape(
+                f"https://raw.githubusercontent.com/{self.owner}/{self.repo}/{self.branch}/content/"
+            )
+            relpath = re.sub(esc_uri_prefix, "", uri)
+
+            # Get the file so that we can reference its sha
+            get_resp = self._logged_api(
+                r"/repos/{owner}/{repo}/contents/{path}",
+                "GET",
+                route=dict(owner=self.owner, repo=self.repo, path=relpath),
+            )
+
+            # Actually delete the file, referencing the file's sha
+            del_resp = self._logged_api(
+                r"/repos/{owner}/{repo}/contents/{path}",
+                "DELETE",
+                route=dict(owner=self.owner, repo=self.repo, path=relpath),
+                data=dict(
+                    message=f"Remove media item {relpath}",
+                    sha=get_resp["sha"],
+                ),
+            )
 
     def _collect_media_for_post(
         self, postslug: str, postbody: str, media: typing.List[str]
     ):
+        """After uploading media to Github, collect it into a single post.
+
+        Once the media is uploaded and a post is created that uses it,
+        this function will collect the uploaded media into the post.
+
+        Unfortunately this is not working at all.
+        I cannot seem to move files from one path to another via the Github API.
+        <https://stackoverflow.com/questions/70228924/how-can-i-move-files-using-the-github-api>
+
+        Going to scrap this approach in a future commit.
+        Recording here for posterity.
+        """
         # We expect the media to be raw.githubusercontent.com URIs.
         # do _not_ try to collect media at any other URI
         # TODO: are githubusercontent.com URIs going to work well?
@@ -325,17 +404,18 @@ class HugoGithubRepo(base.HugoBase):
             return
 
         # Get the branch object
-        # We need this to get the sha of the current branch so we can commit to it later.
+        # We need this to get the git sha for the lastest commit on this branch
         branch_resp = self._logged_api(
             r"/repos/{owner}/{repo}/branches/{branch}",
             "GET",
             route=dict(owner=self.owner, repo=self.repo, branch=self.branch),
         )
-        current_branch_sha = branch_resp["sha"]
+        latest_branch_commit_sha = branch_resp["commit"]["sha"]
 
         # Get the tree for the tip of that branch
         # This contains info on all files in the current commit.
         # TODO: this might not work for large repos which will not return the whole tree in one request?
+        """
         tree_resp = self._logged_api(
             r"/repos/{owner}/{repo}/git/trees/{sha}",
             "GET",
@@ -353,9 +433,25 @@ class HugoGithubRepo(base.HugoBase):
         for child in tree_resp["tree"]:
             if child["path"] in relpaths:
                 tree_children_old["path"] = child
+        """
 
         for oldpath in relpaths:
+            """
             oldobj = tree_children_old[oldpath]
+            """
+            filename = oldpath.split("/")[-1]
+            parent_path = "/".join(oldpath.split("/")[0:-1]).strip("/")
+            parent_tree_obj = self._logged_api(
+                r"/repos/{owner}/{repo}/git/trees/{branch}:{quoted_path}",
+                "GET",
+                route=dict(
+                    owner=self.owner,
+                    repo=self.repo,
+                    branch=self.branch,
+                    quoted_path=quote_plus(parent_path),
+                ),
+            )
+            oldobj = [o for o in parent_tree_obj["tree"] if o["path"] == filename][0]
 
             # newpath will be like content/blog/<post slug>/<file hash>/<file name>.jpeg
             newpath = re.sub(
@@ -368,8 +464,8 @@ class HugoGithubRepo(base.HugoBase):
             # and referencing their "sha" property (the hash of their contents).
             tree_child = {
                 "path": newpath,
-                "mode": oldobj["mode"],
-                "type": oldobj["type"],
+                "mode": "100644",
+                "type": "blob",
                 "sha": oldobj["sha"],
             }
 
@@ -391,7 +487,7 @@ class HugoGithubRepo(base.HugoBase):
             data={
                 "message": f"Renaming {relpaths} to live in the collection for the slug {postslug}",
                 "tree": newtree_resp["sha"],
-                "parents": [current_branch_sha],
+                "parents": [latest_branch_commit_sha],
             },
         )
 

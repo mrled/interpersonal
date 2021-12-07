@@ -141,7 +141,7 @@ def test_e2e_github_microblog_create_post(
         )
 
         try:
-            assert resp.status_code == 200
+            assert resp.status_code == 201
             assert resp.headers["Location"] == post_uri
         except BaseException:
             print(f"Failing test. Response body: {resp.data}")
@@ -171,4 +171,126 @@ def test_e2e_github_microblog_create_post(
             assert retrvd_content == post_content
         except BaseException:
             print(f"Failing test. Response body: {resp.data}")
+            raise
+
+
+def test_e2e_github_media_endpoint_double_upload_and_delete(
+    app: Flask,
+    indieauthfix: IndieAuthActions,
+    client: FlaskClient,
+    testconstsfix: TestConsts,
+):
+    with app.app_context():
+        z2btd = indieauthfix.zero_to_bearer_with_test_data()
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {z2btd.btoken}"
+        imguri = f"https://raw.githubusercontent.com/mrled/interpersonal-test-blog/master/content/static/media/{testconstsfix.img_mosaic.sha256}/github-ncsa-mosaic.png"
+
+        # Test that the first upload works
+        resp1 = client.post(
+            f"/micropub/{testconstsfix.github_e2e_blog_name}/media",
+            data={"file": testconstsfix.img_mosaic.fstor()},
+            headers=headers,
+        )
+        try:
+            assert resp1.status_code == 201
+            assert resp1.headers["Location"] == imguri
+        except BaseException:
+            print(f"Failing test. Response body: {resp1.data}")
+            raise
+
+        # Test that the same call works again, but returns 200 not 201 as the file does not need to be re-uploaded
+        resp2 = client.post(
+            f"/micropub/{testconstsfix.github_e2e_blog_name}/media",
+            data={"file": testconstsfix.img_mosaic.fstor()},
+            headers=headers,
+        )
+        try:
+            assert resp2.status_code == 200
+            assert resp2.headers["Location"] == imguri
+        except BaseException:
+            print(f"Failing test. Response body: {resp2.data}")
+            raise
+
+        # Delete the media item so that our test is idempotent (ish)
+        blog: github.HugoGithubRepo = app.config["APPCONFIG"].blog(
+            testconstsfix.github_e2e_blog_name
+        )
+        blog._delete_media([imguri])
+
+
+def test_e2e_github_upload_media_endpoint_and_reference_in_json_post(
+    app: Flask,
+    indieauthfix: IndieAuthActions,
+    client: FlaskClient,
+    testconstsfix: TestConsts,
+):
+    with app.app_context():
+        z2btd = indieauthfix.zero_to_bearer_with_test_data()
+        headers = Headers()
+        headers["Authorization"] = f"Bearer {z2btd.btoken}"
+        imguri = f"https://raw.githubusercontent.com/mrled/interpersonal-test-blog/master/content/static/media/{testconstsfix.img_mosaic.sha256}/github-ncsa-mosaic.png"
+
+        # Upload a file
+        upload_resp = client.post(
+            f"/micropub/{testconstsfix.github_e2e_blog_name}/media",
+            data={"file": testconstsfix.img_mosaic.fstor()},
+            headers=headers,
+        )
+        try:
+            assert upload_resp.status_code == 201
+            uploaded_imguri = upload_resp.headers["Location"]
+            assert uploaded_imguri == imguri
+        except BaseException:
+            print(f"Failing test. Response body: {upload_resp.data}")
+            raise
+
+        post_now = datetime.now()
+        slug = f"test-post-{post_now.timestamp()}"
+        post_uri = f"{testconstsfix.github_e2e_blog_uri}blog/{slug}"
+        post_content = f"![a nice test image]({uploaded_imguri}).\n\nThis is a test post created at {post_now} (timestamped {post_now.timestamp()})."
+        post_name = f"Test post {post_now.timestamp()}"
+        published_imguri = f"{testconstsfix.github_e2e_blog_uri}blog/{slug}/{testconstsfix.img_mosaic.sha256}/github-ncsa-mosaic.png"
+
+        post_resp = client.post(
+            f"/micropub/{testconstsfix.github_e2e_blog_name}",
+            json={
+                "type": ["h-entry"],
+                "properties": {
+                    "name": [post_name],
+                    "slug": [slug],
+                    "content": [post_content],
+                    "photo": [uploaded_imguri],
+                },
+            },
+            headers=headers,
+        )
+        try:
+            assert post_resp.status_code == 201
+            assert post_resp.headers["Location"] == post_uri
+        except BaseException:
+            print(f"Failing test. Response body: {post_resp.data}")
+            raise
+
+        # Test that it is gettable
+        endpoint = f"/micropub/{testconstsfix.github_e2e_blog_name}?" + urlencode(
+            {
+                "q": "source",
+                "url": post_uri,
+            }
+        )
+        post_resp = client.get(
+            endpoint,
+            headers=headers,
+        )
+
+        try:
+            assert post_resp.status_code == 200
+            json_data = json.loads(post_resp.data)
+            content = json_data["properties"]["content"][0]["markdown"]
+            print(content)
+            assert uploaded_imguri not in content
+            assert published_imguri in content
+        except BaseException:
+            print(f"Failing test. Response body: {post_resp.data}")
             raise

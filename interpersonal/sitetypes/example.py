@@ -1,11 +1,10 @@
 """Sites hosted on Github"""
 
-import hashlib
-import os.path
 import re
 import textwrap
 import typing
 
+from flask import current_app
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
@@ -84,13 +83,17 @@ class HugoExampleBlog(base.HugoBase):
         self.posts[f"/{ppath}"] = raw_body
         return f"{self.baseuri}{ppath}"
 
-    def _add_media(self, media: typing.List[FileStorage]) -> typing.List[str]:
-        uris = []
+    def _add_media(
+        self, media: typing.List[FileStorage]
+    ) -> typing.List[base.AddedMediaItem]:
+        items: typing.List[base.AddedMediaItem] = []
         for item in media:
             uri = self._media_item_uri(item)
-            self.media[uri] = item
-            uris.append(uri)
-        return uris
+            extant = uri in self.media
+            if not extant:
+                self.media[uri] = item
+            items.append(base.AddedMediaItem(uri, not extant))
+        return items
 
     def _collect_media_for_post(
         self, postslug: str, postbody: str, media: typing.List[str]
@@ -99,6 +102,12 @@ class HugoExampleBlog(base.HugoBase):
         if postslug not in self.collectedmedia:
             self.collectedmedia[postslug] = {}
         for uri in media:
+
+            if not uri.startswith(self.baseuri):
+                current_app.logger.debug(
+                    f"Media collection will skip URI '{uri}' as it is not prefixed with what we expect '{self.baseuri}'."
+                )
+                continue
 
             if uri not in self.media:
                 raise InterpersonalNotFoundError(

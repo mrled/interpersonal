@@ -341,11 +341,11 @@ def micropub_blog_endpoint_POST(blog_name: str):
             # (Not sure if that actually happens out in the wild, but maybe?)
             # mtype will be one of 'photo', 'video', 'audio'.
             for mtype in request_files:
-                mitem = request_files[mtype]
-                newly_added_media_uris = blog.add_media(mitem)
+                mitems = request_files[mtype]
+                added = blog.add_media(mitems)
                 if mtype not in mf2obj["properties"]:
                     mf2obj["properties"][mtype] = []
-                mf2obj["properties"][mtype] += newly_added_media_uris
+                mf2obj["properties"][mtype] += [a.uri for a in added]
 
         else:
             raise MicropubInvalidRequestError(
@@ -390,10 +390,10 @@ def micropub_blog_media(blog_name):
         raise MicropubInvalidRequestError(
             f"Exactly one file can be submitted at a time, but this request has {len(files)} files"
         )
-    new_media_uri = blog.add_media(files)[0]
+    added = blog.add_media(files)[0]
     resp = Response("")
-    resp.headers["Location"] = new_media_uri
-    resp.status_code = 201
+    resp.headers["Location"] = added.uri
+    resp.status_code = 201 if added.created else 200
     return resp
 
 
