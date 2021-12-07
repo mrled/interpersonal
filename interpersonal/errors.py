@@ -30,13 +30,15 @@ def catchall_error_handler(exc: Exception):
     If not, writes the exception and traceback to the log and returns an
     internal server error.
     """
-    if hasattr(exc, "__interpersonal_exception_handler__"):
-        return exc.__interpersonal_exception_handler__()
-    else:
-        current_app.logger.exception(exc)
-        # estr = "{err}\n{tb}".format(err=str(exc), tb=exc.__traceback__.__annotations__)
+    try:
+        result = exc.__interpersonal_exception_handler__()
+    except BaseException:
         estr = "\n".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-        return json_error(500, "Unhandled internal error", estr)
+        current_app.logger.debug(
+            f"catchall_error_handler(): exception '{exc}' (type {type(exc)}) does not have an __interpersonal_exception_handler__() method, returning a 500 error. Full exception detauls:\n{estr}"
+        )
+        result = json_error(500, "Unhandled internal error", estr)
+    return result
 
 
 class InvalidAuthCodeError(Exception):
