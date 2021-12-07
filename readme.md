@@ -74,7 +74,12 @@ export INTERPERSONAL_TEST_GITHUB_APP_ID=153329
 # The private key that Github generated
 export INTERPERSONAL_TEST_GITHUB_APP_PRIVATE_KEY=./interpersonal-micahrl-com.2021-11-20.private-key.pem
 
+# Run ALL the e2e tests
 INTERPERSONAL_TEST_GITHUB_RUN_E2E_TESTS=true pytest tests/test_e2e_github.py
+
+# Run a single test by name
+# You can pass '-k <testname>' to pytest to run just a single test by its function name
+INTERPERSONAL_TEST_GITHUB_RUN_E2E_TESTS=true pytest -k test_e2e_github_GithubApiAppJwtAuth_app_installations
 ```
 
 Note that actually deploying this on Netlify (or anywhere else) is not necessary,
