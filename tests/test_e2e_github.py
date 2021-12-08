@@ -229,7 +229,7 @@ def test_e2e_github_upload_media_endpoint_and_reference_in_json_post(
         z2btd = indieauthfix.zero_to_bearer_with_test_data()
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
-        imguri = f"https://raw.githubusercontent.com/mrled/interpersonal-test-blog/master/content/static/media/{testconstsfix.img_mosaic.sha256}/github-ncsa-mosaic.png"
+        imguri = f"https://interpersonal.example.com/micropub/interpersonal-test-blog/media/{testconstsfix.img_mosaic.sha256}/github-ncsa-mosaic.png"
 
         # Upload a file
         upload_resp = client.post(

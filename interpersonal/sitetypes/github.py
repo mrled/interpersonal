@@ -2,6 +2,7 @@
 
 import base64
 import json
+import os.path
 import re
 import time
 import typing
@@ -12,6 +13,7 @@ import requests
 from flask import current_app
 from ghapi.all import GhApi
 
+from interpersonal.errors import InterpersonalNotFoundError
 from interpersonal.sitetypes import base
 
 
@@ -346,8 +348,12 @@ class HugoGithubRepo(base.HugoBase):
         items: typing.List[base.AddedMediaItem] = []
         for item in media:
             relpath = f"{self.mediadir}/{item.hexdigest}/{item.filename}"
-            uploaded = self._add_repo_file_if_not_exists(relpath, item)
-            items.append(uploaded)
+            if self.collectmedia:
+                added = self._add_media_staging([item])
+                items += added
+            else:
+                uploaded = self._add_repo_file_if_not_exists(relpath, item)
+                items.append(uploaded)
         return items
 
     def _delete_media(self, uris: typing.List[str]):
@@ -384,5 +390,47 @@ class HugoGithubRepo(base.HugoBase):
 
     def _collect_media_for_post(
         self, postslug: str, postbody: str, media: typing.List[str]
-    ):
-        raise NotImplementedError
+    ) -> str:
+        for staging_uri in media:
+            if not staging_uri.startswith(self.interpersonal_uri):
+                current_app.logger.debug(
+                    f"Media collection will skip URI '{staging_uri}' as it is not prefixed with what we expect '{self.interpersonal_uri}'."
+                )
+                continue
+            splituri = staging_uri.split("/")
+            digest = splituri[-2]
+            filename = splituri[-1]
+            localpath = os.path.join(self.mediastaging, digest, filename)
+            repopath = os.path.join(
+                "content", self.slugprefix, postslug, digest, filename
+            )
+            if not os.path.exists(localpath):
+                raise InterpersonalNotFoundError(localpath)
+            new_uri = self._media_item_uri_collected(postslug, staging_uri)
+            postbody = re.sub(re.escape(staging_uri), new_uri, postbody)
+
+            repofile = self._get_repo_file_if_exists(repopath)
+            if repofile:
+                current_app.logger.debug(
+                    f"Media already exists at {repopath}, nothing to do..."
+                )
+                continue
+            else:
+                current_app.logger.debug(
+                    f"Media does not yet exist at {repopath}, will upload..."
+                )
+
+            with open(localpath, "rb") as fp:
+                b64content = base64.b64encode(fp.read()).decode()
+
+            put_resp = self._logged_api(
+                r"/repos/{owner}/{repo}/contents/{path}",
+                "PUT",
+                route=dict(owner=self.owner, repo=self.repo, path=repopath),
+                data=dict(
+                    message=f"Add media item {repopath}",
+                    content=b64content,
+                ),
+            )
+
+        return postbody

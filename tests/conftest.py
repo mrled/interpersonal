@@ -164,6 +164,10 @@ def app():
         database.init_db()
         database.get_db().executescript(TestConsts.sql_data)
 
+    # Interpersonal expects that each blog's media staging path is created in advance
+    for blog in app.config["APPCONFIG"].blogs:
+        os.makedirs(os.path.join(media_staging_path, blog.name))
+
     yield app
 
     os.close(db_fd)
