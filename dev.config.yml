@@ -4,6 +4,8 @@ loglevel: DEBUG
 database: dev.db
 password: secret p@ss
 cookie_secret_key: any value is fine in dev, even this literal string
+uri: http://localhost:8000/
+mediastaging: mediastaging
 blogs:
   - name: example
     type: built-in example

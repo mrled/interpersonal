@@ -1,6 +1,7 @@
 import traceback
 
 from flask import current_app, jsonify, render_template
+from werkzeug.exceptions import HTTPException
 
 
 def json_error(errcode: int, errmsg: str, errdesc: str = ""):
@@ -30,15 +31,23 @@ def catchall_error_handler(exc: Exception):
     If not, writes the exception and traceback to the log and returns an
     internal server error.
     """
+
+    if isinstance(exc, HTTPException):
+        # If this is a Flask/Werkzeug exception, just use it directly
+        raise exc
+
     try:
-        result = exc.__interpersonal_exception_handler__()
+        # If it's a custom Interpersonal exception with a handler, use that handler
+        return exc.__interpersonal_exception_handler__()
+
     except BaseException:
+        # Otherwise, it's unhandled and presumably unexpected.
+        # Fall back to a generic handler that includes as much information as possible
         estr = "\n".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         current_app.logger.debug(
             f"catchall_error_handler(): exception '{exc}' (type {type(exc)}) does not have an __interpersonal_exception_handler__() method, returning a 500 error. Full exception detauls:\n{estr}"
         )
-        result = json_error(500, "Unhandled internal error", estr)
-    return result
+        return json_error(500, "Unhandled internal error", estr)
 
 
 class InvalidAuthCodeError(Exception):

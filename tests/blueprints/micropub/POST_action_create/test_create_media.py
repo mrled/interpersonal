@@ -1,6 +1,4 @@
-import io
 import json
-import os.path
 from urllib.parse import quote, urlencode
 
 from flask.app import Flask
@@ -134,10 +132,12 @@ def test_action_create_post_multipart_form_with_two_files(
             props = json_data["properties"]
             photodata = props["photo"]
             assert len(photodata) == 2
-            assert photodata[0].startswith("https://interpersonal.example.org/media/")
-            assert photodata[1].startswith("https://interpersonal.example.org/media/")
-            assert photodata[0].endswith("singularity-room.jpeg")
-            assert photodata[1].endswith("item.jpeg")
+            img_sing_uri = (
+                f"{posturi}/{testconstsfix.img_sing.sha256}/singularity-room.jpeg"
+            )
+            img_xeno_uri = f"{posturi}/{testconstsfix.img_xeno.sha256}/item.jpeg"
+            assert photodata[0] == img_sing_uri
+            assert photodata[1] == img_xeno_uri
         except BaseException:
             print(f"Failing test. Response body: {getresp.data}")
             raise
@@ -154,8 +154,12 @@ def test_action_create_post_json_with_media(
         z2btd = indieauthfix.zero_to_bearer_with_test_data()
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
+        postslug = "test_action_create_post_json_with_media"
+        posturi = f"{testconstsfix.blog_uri}blog/{postslug}"
+        img_subpath = f"{testconstsfix.img_mosaic.sha256}/github-ncsa-mosaic.png"
+        imguri_staging = f"{testconstsfix.interpersonal_uri}micropub/example-blog/staging/{img_subpath}"
+        imguri_final = f"{posturi}/{img_subpath}"
 
-        imguri = f"{testconstsfix.blog_uri}media/{testconstsfix.img_mosaic.sha256}/github-ncsa-mosaic.png"
         media_resp = client.post(
             "/micropub/example-blog/media",
             data={"file": testconstsfix.img_mosaic.fstor()},
@@ -164,13 +168,10 @@ def test_action_create_post_json_with_media(
 
         try:
             assert media_resp.status_code == 201
-            assert media_resp.headers["Location"] == imguri
+            assert media_resp.headers["Location"] == imguri_staging
         except BaseException:
             print(f"Failing media_resp request. Response body: {media_resp.data}")
             raise
-
-        postslug = "test_action_create_post_json_with_media"
-        posturi = f"{testconstsfix.blog_uri}blog/{postslug}"
 
         post_resp = client.post(
             "/micropub/example-blog",
@@ -210,11 +211,7 @@ def test_action_create_post_json_with_media(
             props = json_data["properties"]
             photodata = props["photo"]
             assert len(photodata) == 1
-            assert photodata[0].startswith("https://interpersonal.example.org/media/")
-            assert photodata[0].endswith("github-ncsa-mosaic.png")
+            assert photodata[0] == imguri_final
         except BaseException:
             print(f"Failing test. Response body: {getresp.data}")
             raise
-
-
-## TODO: Test that video and audio uploads work too

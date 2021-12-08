@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import tempfile
 import typing
 
@@ -19,10 +20,12 @@ loglevel: DEBUG
 database: {db_path}
 password: {password}
 cookie_secret_key: {cookie_secret_key}
+uri: {interpersonal_uri}
+mediastaging: {mediastaging}
 blogs:
   - name: example-blog
     type: built-in example
-    uri: {baseuri}
+    uri: {blog_uri}
     slugprefix: /blog
     mediaprefix: /media
     collectmedia: yes
@@ -94,7 +97,8 @@ class TestConsts:
     login_password = "test-login-password-123X"
     cookie_secret_key = "test-cookie-secret-key-ASDF-1234"
     sql_data = TEST_SQL_DATA
-    blog_uri = "https://interpersonal.example.org/"
+    interpersonal_uri = "https://interpersonal.example.com/"
+    blog_uri = "https://blog.example.org/"
 
     github_e2e_blog_name = "interpersonal-test-blog"
     github_e2e_blog_uri = os.environ.get("INTERPERSONAL_TEST_GITHUB_BLOG_URI")
@@ -131,12 +135,15 @@ def testconstsfix():
 def app():
     db_fd, db_path = tempfile.mkstemp()
     conf_fd, conf_path = tempfile.mkstemp()
+    media_staging_path = tempfile.mkdtemp()
 
     appconfig_str = TEST_APPCONFIG_YAML_TEMPLATE.format(
         db_path=db_path,
         password=TestConsts.login_password,
         cookie_secret_key=TestConsts.cookie_secret_key,
-        baseuri=TestConsts.blog_uri,
+        interpersonal_uri=TestConsts.interpersonal_uri,
+        blog_uri=TestConsts.blog_uri,
+        mediastaging=media_staging_path,
         github_e2e_blog_name=TestConsts.github_e2e_blog_name,
         github_e2e_blog_uri=TestConsts.github_e2e_blog_uri,
         github_e2e_repo_owner=TestConsts.github_e2e_repo_owner,
@@ -163,6 +170,7 @@ def app():
     os.unlink(db_path)
     os.close(conf_fd)
     os.unlink(conf_path)
+    shutil.rmtree(media_staging_path)
 
 
 @pytest.fixture

@@ -55,6 +55,8 @@ def create_app(
     app.config.from_mapping(
         # The path to the sqlite database
         DBPATH=appconfig.database,
+        # The path to the temporary media staging directory
+        MEDIASTAGING=appconfig.mediastaging,
         # A valid AppConfig object
         APPCONFIG=appconfig,
         # A secret, random value used to encrypt the session cookie

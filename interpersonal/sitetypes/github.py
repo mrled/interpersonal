@@ -6,14 +6,11 @@ import re
 import time
 import typing
 from datetime import datetime
-from urllib.parse import quote_plus
 
 import jwt
 import requests
 from flask import current_app
 from ghapi.all import GhApi
-from requests.models import HTTPError
-from werkzeug.datastructures import FileStorage
 
 from interpersonal.sitetypes import base
 
@@ -198,6 +195,7 @@ class HugoGithubRepo(base.HugoBase):
         self,
         name,
         uri,
+        interpersonal_uri,
         slugprefix,
         mediaprefix,
         owner: str,
@@ -206,6 +204,7 @@ class HugoGithubRepo(base.HugoBase):
         github_app_id: str,
         private_key_pem: str,
         collectmedia=None,
+        mediastaging=None,
     ):
         self.owner = owner
         self.repo = repo
@@ -215,7 +214,15 @@ class HugoGithubRepo(base.HugoBase):
         self.mediadir = f"static/{mediaprefix.strip('/')}"
         self.branch = branch
 
-        super().__init__(name, uri, slugprefix, mediaprefix, collectmedia)
+        super().__init__(
+            name,
+            uri,
+            interpersonal_uri,
+            slugprefix,
+            mediaprefix,
+            collectmedia=collectmedia,
+            mediastaging=mediastaging,
+        )
 
     def _logged_api(self, *args, **kwargs):
         """Call self.api, logging parameters and results"""
@@ -280,55 +287,67 @@ class HugoGithubRepo(base.HugoBase):
         )
         return f"{self.baseuri}{ppath}"
 
-    def _add_media(
-        self, media: typing.List[FileStorage]
-    ) -> typing.List[base.AddedMediaItem]:
-        items: typing.List[base.AddedMediaItem] = []
-        for item in media:
-            digest = self._media_item_hash(item)
-            filename = self._media_item_filename(item)
-            relpath = f"{self.mediadir}/{digest}/{filename}"
+    def _get_repo_file_if_exists(self, path: str) -> typing.Union[typing.Any, None]:
+        """Retrieve a single file if it exists, or None if not"""
+        try:
+            get_resp = self._logged_api(
+                r"/repos/{owner}/{repo}/contents/{path}",
+                "GET",
+                route=dict(owner=self.owner, repo=self.repo, path=path),
+            )
+            current_app.logger.debug(f"Successfully retrieved file from {path}")
+            return get_resp
 
-            # TODO: are githubusercontent.com URIs going to work well?
-            uploaded_uri = f"https://raw.githubusercontent.com/{self.owner}/{self.repo}/{self.branch}/content/{relpath}"
-
+        except BaseException as exc:
             try:
-                get_resp = self._logged_api(
-                    r"/repos/{owner}/{repo}/contents/{path}",
-                    "GET",
-                    route=dict(owner=self.owner, repo=self.repo, path=relpath),
+                statuscode = int(exc.status)
+            except BaseException as inner_exc:
+                statuscode = None
+            if statuscode != 404:
+                current_app.logger.error(
+                    f"Unhandled error trying to talk to github, re-raising..."
                 )
-                current_app.logger.debug(
-                    f"Media already exists at {relpath}, nothing to do..."
-                )
-                items.append(base.AddedMediaItem(uploaded_uri, False))
-                continue
+                raise
+            current_app.logger.debug(f"No file exists at {path}")
+            return None
 
-            except BaseException as exc:
-                try:
-                    statuscode = int(exc.status)
-                except BaseException as inner_exc:
-                    statuscode = None
-                if statuscode != 404:
-                    current_app.logger.error(
-                        f"Unhandled error trying to talk to github, re-raising..."
-                    )
-                    raise
-                current_app.logger.debug(
-                    f"Media does not yet exist at {relpath}, will upload..."
-                )
-
+    def _add_repo_file_if_not_exists(
+        self, relpath: str, opaque_file: base.OpaqueFile
+    ) -> base.AddedMediaItem:
+        """Given a repo-relative path and a file, upload it if it does not exist"""
+        # TODO: are githubusercontent.com URIs going to work well?
+        uploaded_uri = f"https://raw.githubusercontent.com/{self.owner}/{self.repo}/{self.branch}/content/{relpath}"
+        file_exists = self._get_repo_file_if_exists(relpath)
+        if file_exists:
+            current_app.logger.debug(
+                f"Media already exists at {relpath}, nothing to do..."
+            )
+            created = False
+        else:
+            current_app.logger.debug(
+                f"Media does not yet exist at {relpath}, will upload..."
+            )
             put_resp = self._logged_api(
                 r"/repos/{owner}/{repo}/contents/{path}",
                 "PUT",
                 route=dict(owner=self.owner, repo=self.repo, path=relpath),
                 data=dict(
                     message=f"Add media item {relpath}",
-                    content=base64.b64encode(item.read()).decode(),
+                    content=base64.b64encode(opaque_file.contents).decode(),
                 ),
             )
+            created = True
 
-            items.append(base.AddedMediaItem(uploaded_uri, True))
+        return base.AddedMediaItem(uploaded_uri, created)
+
+    def _add_media(
+        self, media: typing.List[base.OpaqueFile]
+    ) -> typing.List[base.AddedMediaItem]:
+        items: typing.List[base.AddedMediaItem] = []
+        for item in media:
+            relpath = f"{self.mediadir}/{item.hexdigest}/{item.filename}"
+            uploaded = self._add_repo_file_if_not_exists(relpath, item)
+            items.append(uploaded)
         return items
 
     def _delete_media(self, uris: typing.List[str]):
@@ -366,137 +385,4 @@ class HugoGithubRepo(base.HugoBase):
     def _collect_media_for_post(
         self, postslug: str, postbody: str, media: typing.List[str]
     ):
-        """After uploading media to Github, collect it into a single post.
-
-        Once the media is uploaded and a post is created that uses it,
-        this function will collect the uploaded media into the post.
-
-        Unfortunately this is not working at all.
-        I cannot seem to move files from one path to another via the Github API.
-        <https://stackoverflow.com/questions/70228924/how-can-i-move-files-using-the-github-api>
-
-        Going to scrap this approach in a future commit.
-        Recording here for posterity.
-        """
-        # We expect the media to be raw.githubusercontent.com URIs.
-        # do _not_ try to collect media at any other URI
-        # TODO: are githubusercontent.com URIs going to work well?
-        uri_prefix = f"https://raw.githubusercontent.com/{self.owner}/{self.repo}/{self.branch}/{self.dirs.content}/"
-
-        relpaths = []
-
-        for uri in media:
-            if not uri.startswith(uri_prefix):
-                current_app.logger.debug(
-                    f"Media collection will skip URI '{uri}' as it is not prefixed with what we expect '{uri_prefix}'."
-                )
-                continue
-
-            relpathidx = len(uri_prefix) - 1
-
-            # this will be like static/media/<file hash>/<file name>.jpeg
-            oldpath = uri[relpathidx:]
-
-            relpaths.append(oldpath)
-
-        if len(relpaths) < 1:
-            current_app.logger.debug(f"No URIs to move")
-            return
-
-        # Get the branch object
-        # We need this to get the git sha for the lastest commit on this branch
-        branch_resp = self._logged_api(
-            r"/repos/{owner}/{repo}/branches/{branch}",
-            "GET",
-            route=dict(owner=self.owner, repo=self.repo, branch=self.branch),
-        )
-        latest_branch_commit_sha = branch_resp["commit"]["sha"]
-
-        # Get the tree for the tip of that branch
-        # This contains info on all files in the current commit.
-        # TODO: this might not work for large repos which will not return the whole tree in one request?
-        """
-        tree_resp = self._logged_api(
-            r"/repos/{owner}/{repo}/git/trees/{sha}",
-            "GET",
-            route=dict(owner=self.owner, repo=self.repo, sha=current_branch_sha),
-        )
-        tree_sha = tree_resp["sha"]
-
-        # Create a new tree object.
-        # We will use this to move the files from their old location to the new one.
-        newtree = {"base_tree": tree_sha, "tree": []}
-
-        # A list of tree children with the OLD data
-        tree_children_old = {}
-
-        for child in tree_resp["tree"]:
-            if child["path"] in relpaths:
-                tree_children_old["path"] = child
-        """
-
-        for oldpath in relpaths:
-            """
-            oldobj = tree_children_old[oldpath]
-            """
-            filename = oldpath.split("/")[-1]
-            parent_path = "/".join(oldpath.split("/")[0:-1]).strip("/")
-            parent_tree_obj = self._logged_api(
-                r"/repos/{owner}/{repo}/git/trees/{branch}:{quoted_path}",
-                "GET",
-                route=dict(
-                    owner=self.owner,
-                    repo=self.repo,
-                    branch=self.branch,
-                    quoted_path=quote_plus(parent_path),
-                ),
-            )
-            oldobj = [o for o in parent_tree_obj["tree"] if o["path"] == filename][0]
-
-            # newpath will be like content/blog/<post slug>/<file hash>/<file name>.jpeg
-            newpath = re.sub(
-                f"{self.dirs.static}/{self.mediadir}",
-                f"{self.dirs.content}/{self.slugprefix}/{postslug}",
-                oldpath,
-            )
-
-            # We move objects by setting their "path" property to a new location,
-            # and referencing their "sha" property (the hash of their contents).
-            tree_child = {
-                "path": newpath,
-                "mode": "100644",
-                "type": "blob",
-                "sha": oldobj["sha"],
-            }
-
-            newtree["tree"].append(tree_child)
-
-        # Create a new tree
-        newtree_resp = self._logged_api(
-            r"/repos/{owner}/{repo}/git/trees?recursive=1",
-            "POST",
-            route=dict(owner=self.owner, repo=self.repo),
-            data=newtree,
-        )
-
-        # Create a Git commit containing the new tree with a parent of the current version
-        commit_resp = self._logged_api(
-            r"/repos/{owner}/{repo}/git/commits",
-            "POST",
-            route=dict(owner=self.owner, repo=self.repo),
-            data={
-                "message": f"Renaming {relpaths} to live in the collection for the slug {postslug}",
-                "tree": newtree_resp["sha"],
-                "parents": [latest_branch_commit_sha],
-            },
-        )
-
-        # Update branch to the new commit
-        branch_upd_resp = self._logged_api(
-            r"/repos/{owner}/{repo}/git/refs/heads/{branch}",
-            "PATCH",
-            route=dict(owner=self.owner, repo=self.repo, branch=self.branch),
-            data={"sha": commit_resp["sha"]},
-        )
-
-        # TODO: Update the post body also!
+        raise NotImplementedError

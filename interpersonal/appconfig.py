@@ -1,6 +1,7 @@
 """Manage Interpersonal configuration"""
 
 import dataclasses
+import os.path
 import typing
 
 import yaml
@@ -17,6 +18,7 @@ class AppConfig:
     loglevel: str
     database: str
     password: str
+    mediastaging: str
     cookie_secret_key: str
     blogs: typing.List[HugoBase]
 
@@ -29,20 +31,32 @@ class AppConfig:
         with open(path) as fp:
             yamlcontents = yaml.load(fp, yaml.Loader)
 
+        interpersonal_uri = yamlcontents["uri"]
+
+        mediastaging_base = yamlcontents.get("mediastaging", None)
+        if not os.path.isdir(mediastaging_base):
+            raise Exception(
+                f"Media staging directory {mediastaging_base} does not exist"
+            )
+
         blogs: typing.List[HugoBase] = []
         for yamlblog in yamlcontents["blogs"]:
+            mediastaging_sub = os.path.join(mediastaging_base, yamlblog["name"])
             if yamlblog["type"] == "built-in example":
                 blog = example.HugoExampleBlog(
                     yamlblog["name"],
                     yamlblog["uri"],
+                    interpersonal_uri,
                     yamlblog["slugprefix"],
                     yamlblog["mediaprefix"],
-                    collectmedia=yamlblog.get("collectmedia"),
+                    collectmedia=yamlblog.get("collectmedia", False),
+                    mediastaging=mediastaging_sub,
                 )
             elif yamlblog["type"] == "github":
                 blog = github.HugoGithubRepo(
                     yamlblog["name"],
                     yamlblog["uri"],
+                    interpersonal_uri,
                     yamlblog["slugprefix"],
                     yamlblog["mediaprefix"],
                     yamlblog["github_owner"],
@@ -50,7 +64,8 @@ class AppConfig:
                     yamlblog["github_repo_branch"],
                     yamlblog["github_app_id"],
                     yamlblog["github_app_private_key"],
-                    collectmedia=yamlblog.get("collectmedia"),
+                    collectmedia=yamlblog.get("collectmedia", False),
+                    mediastaging=mediastaging_sub,
                 )
             else:
                 raise Exception(f"Unknown blog type {yamlblog['type']}")
@@ -60,7 +75,8 @@ class AppConfig:
         db = yamlcontents["database"]
         cookie_secret_key = yamlcontents["cookie_secret_key"]
         password = yamlcontents["password"]
-        return cls(loglevel, db, password, cookie_secret_key, blogs)
+
+        return cls(loglevel, db, password, mediastaging_base, cookie_secret_key, blogs)
 
     def blog(self, name: str) -> HugoBase:
         """Get a blog by name"""

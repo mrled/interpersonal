@@ -141,6 +141,33 @@ class HugoDirectories:
     static: str
 
 
+class OpaqueFile:
+    """A simple file class for e.g. uploaded files."""
+
+    def __init__(self, file_storage: FileStorage):
+        self.contents = file_storage.read()
+
+        self.content_type = file_storage.content_type
+        self._uploaded_filename_UNSAFE = file_storage.filename or None
+
+        hash = hashlib.sha256(usedforsecurity=False)
+        hash.update(self.contents)
+        self.digest = hash.digest()
+        self.hexdigest = hash.hexdigest()
+
+    @property
+    def filename(self) -> str:
+        """Get the filename to use when storing a media item"""
+        if self._uploaded_filename_UNSAFE:
+            secname = secure_filename(self._uploaded_filename_UNSAFE)
+            basename = os.path.splitext(os.path.basename(secname))[0]
+        else:
+            basename = "item"
+        # E.g. an image with a .jpg extension will be saved with the .jpeg extension.
+        ext = extension_from_content_type(self.content_type)
+        return f"{basename}.{ext}"
+
+
 class HugoBase:
     """Base class for a Hugo blog
 
@@ -152,8 +179,28 @@ class HugoBase:
     TODO: Only built for h-entry at this point
           Not sure what a more general implementation would look like
 
+    About media:
+    (TODO: Test this)
+    This class and its subclasses can operate in one of two modes:
+    - With a dedicated media dur, such that media gets served out of
+      https://your-blog.example.com/<media prefix>/<media hash>/<filename>.jpeg.
+      When media is uploaded, it is added to this final location immediately.
+      Requirements:
+        - `mediaprefix` argument, which must match the `<media prefix>` URI path component above
+        - `collectmedia` set to `False`
+    - By accepting uploaded media, staging it within Interpersonal itself,
+      and "collecting" it into the post directory when the post is created.
+      In staging the media item will have a URI like
+      `https://your-interpersonal.example.com/micropub/your-blog/staging/<media hash>/</filename>.jpeg`
+      and when collected it will be moved underneath the post directory to have a URI like
+      `https://your-blog.example.com/posts/post-one/<media hash>/<filename>.jpeg`.
+      Requirements:
+        - `collectmedia` set to `True`
+
     name:               The name of the blog.
     baseuri:            The base URI of the blog, like https://blog.example.com/
+    interpersonal_uri:  The base URI of interpersonal itself,
+                        like https://interpersonal.example.com/.
     slugprefix:         Prefix for new post slugs, if any.
                         E.g. "/posts/" or "/articles" or "/blog".
                         Leading or trailing slash characters ("/") are stripped.
@@ -162,21 +209,27 @@ class HugoBase:
                         Leading or trailing slash characters ("/") are stripped.
     collectmedia:       If true, if a post has media, move that media into the post's directory
                         after the post is uploaded.
+    mediastaging:       Optional location for a media staging area.
+                        Only used if collectmedia=True.
     """
 
     def __init__(
         self,
         name: str,
         baseuri: str,
+        interpersonal_uri: str,
         slugprefix: str,
         mediaprefix: str,
         collectmedia: bool = False,
+        mediastaging: typing.Optional[str] = None,
     ):
         self.name = name
         self.baseuri = normalize_baseuri(baseuri)
+        self.interpersonal_uri = normalize_baseuri(interpersonal_uri)
         self.slugprefix = slugprefix.strip("/")
         self.mediaprefix = mediaprefix.strip("/")
         self.collectmedia = collectmedia
+        self.mediastaging = mediastaging
         self.dirs = HugoDirectories("content", "static")
 
     def _uri2indexmd(self, uri) -> str:
@@ -239,10 +292,12 @@ class HugoBase:
         if oldpost is not None:
             raise MicropubDuplicatePostError(uri=posturi)
 
-        result = self._add_raw_post_body(slug, post.tostr())
-
         if media and self.collectmedia:
-            self._collect_media_for_post(slug, post.tostr(), media)
+            post_raw_str = self._collect_media_for_post(slug, post.tostr(), media)
+        else:
+            post_raw_str = post.tostr()
+
+        result = self._add_raw_post_body(slug, post_raw_str)
 
         return result
 
@@ -304,7 +359,8 @@ class HugoBase:
 
         media:      A list of werkzeug FileStorage objects
         """
-        return self._add_media(media)
+        processed_media = [OpaqueFile(m) for m in media]
+        return self._add_media(processed_media)
 
     def _post_path(self, slug: str) -> str:
         """Given a slug of a post, return the full path.
@@ -331,7 +387,7 @@ class HugoBase:
         """
         raise NotImplementedError("Please implement this in the subclass")
 
-    def _add_media(self, media: typing.List[FileStorage]) -> str:
+    def _add_media(self, media: typing.List[OpaqueFile]) -> str:
         """Add media.
 
         Must be implemented by a subclass.
@@ -352,7 +408,7 @@ class HugoBase:
 
     def _collect_media_for_post(
         self, postslug: str, postbody: str, media: typing.List[str]
-    ):
+    ) -> str:
         """Collect media for a post into the post's directory
 
         For blogs that want to keep a post's related media in its own folder,
@@ -376,38 +432,92 @@ class HugoBase:
                         e.g. a Github backend must know how to convert a raw.githubusercontent...
                         URI into a relative path for the proper repository.
 
-        Returns None
+        It must return a modified postbody, with all media URIs replaced with their new locations.
         """
         raise NotImplementedError("Please implement this in the subclass")
 
-    def _media_item_hash(self, media_item: FileStorage) -> str:
-        """Calculate the hash of a media storage object."""
-        hash = hashlib.sha256(usedforsecurity=False)
-        hash.update(media_item.stream.read())
-        digest = hash.hexdigest()
-        return digest
+    def _media_item_uri_mediadir(self, slug: str, media_item: OpaqueFile) -> str:
+        """Get the URI for an item relative to the media dir
 
-    def _media_item_filename(self, media_item: FileStorage) -> str:
-        """Get the filename to use when storing a media item"""
-        if media_item.filename:
-            basename = secure_filename(
-                os.path.splitext(os.path.basename(media_item.filename))[0]
-            )
-        else:
-            basename = "item"
-        # E.g. an image with a .jpg extension will be saved with the .jpeg extension.
-        ext = extension_from_content_type(media_item.content_type)
-        return f"{basename}.{ext}"
-
-    def _media_item_uri(self, media_item: FileStorage, digest: str = "") -> str:
-        """Get the URI for a media item.
-
-        media_item:     An uploaded media item
-        digest:         The sha256 digest of the item, calculated if empty
+        For sites that use collectmedia=False.
+        This is the permanent URI, and it does not change after being uploaded.
         """
-        if not digest:
-            digest = self._media_item_hash(media_item)
-        filename = self._media_item_filename(media_item)
+        return f"{self.baseuri}{self.mediaprefix}/{media_item.hexdigest}/{media_item.filename}"
 
-        uri = f"{self.baseuri}{self.mediaprefix}/{digest}/{filename}"
-        return uri
+    def _media_item_uri_staging(self, media_item: OpaqueFile) -> str:
+        """Get the staging URI for a media item
+
+        For sites that use collectmedia=True.
+        Return a temporary URI that is valid until media is collected.
+        """
+        return f"{self.interpersonal_uri}micropub/{self.name}/staging/{media_item.hexdigest}/{media_item.filename}"
+
+    def _media_item_uri_collected(
+        self, slug: str, media_item: typing.Union[OpaqueFile, str]
+    ) -> str:
+        """Get the post-collection URI (under a particular post) for a media item
+
+        For sites that use collectmedia=True.
+        This is the permanent URI, but images are not available at this URI
+        until after _collect_media_for_post() is called.
+
+        Unlike other _media_item_...() functions, `media_item` may be a string.
+        If it is a string, it is assumed to be the staging URI for an image,
+        and the file hash and filename are extracted from it.
+        """
+        if type(media_item) is str:
+            splituri = media_item.split("/")
+            digest = splituri[-2]
+            filename = splituri[-1]
+        else:
+            digest = media_item.hexdigest
+            filename = media_item.filename
+        return f"{self.baseuri}{self.slugprefix}/{slug}/{digest}/{filename}"
+
+    def _add_media_staging(
+        self, media: typing.List[OpaqueFile]
+    ) -> typing.List[AddedMediaItem]:
+        """Add media to an internal media staging area.
+
+        This is a helper method that subclasses may use if they like, or not.
+
+        When media is uploaded to the media endpoint, the post has not yet been created.
+        Media must be saved somewhere regardless.
+        A subclass may choose to save to a dedicated media space like /media/...,
+        in which case the subclass's ._add_media() implementation
+        simply saves it there and is done.
+        Alternatively, a subclass may choose to call _this_ method,
+        which saves media to a staging location, in their ._add_media(),
+        and also implement ._collect_media(), which is called after a post is created,
+        and which will move media from the staging implementation to the final location.
+
+        Using this method requires both collectmedia=True and tempmediapath=/somewhere...
+        in the blog's configuration.
+        """
+
+        if not self.collectmedia:
+            raise Exception(f"collectmedia was not set to true for blog {self.name}")
+        if not self.mediastaging:
+            raise Exception(f"mediastaging was not set for blog {self.blog}")
+        if not os.path.isdir(self.mediastaging):
+            raise Exception(
+                f"Media staging path {self.mediastaging} does not exist (or is not a directory)"
+            )
+
+        result: typing.List[AddedMediaItem] = []
+        for item in media:
+            digest = item.hexdigest
+            parent = os.path.join(self.mediastaging, digest)
+            path = os.path.join(parent, item.filename)
+            if os.path.exists(path):
+                created = False
+            else:
+                created = True
+                parent = os.path.split(path)[0]
+                os.makedirs(parent)
+                with open(path, "wb") as fp:
+                    fp.write(item.contents)
+                uri = f"{self.interpersonal_uri}micropub/{self.name}/media/{digest}/{item.filename}"
+            result.append(AddedMediaItem(uri, created))
+
+        return result

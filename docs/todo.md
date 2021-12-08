@@ -5,6 +5,7 @@ Bigger todo items that need some explication
 ## Misc
 
 * Currently Interpersonal has to map URLs to files sort of hackily, by replacing `https://example.com/` with `content/` in the uri. A site could publish metadata at every url, or at some derivable location (e.g `${url}/.metadata`) that obviates this.
+* Uploads are probably not as efficient as they should be. Should I be worried about keeping the whole upload in RAM so I can hash then actually save it?
 
 ## Describe (and prototype?) basic Hugo theme that works well with Micropub expectations
 

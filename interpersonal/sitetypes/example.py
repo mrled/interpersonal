@@ -1,16 +1,15 @@
 """Sites hosted on Github"""
 
+import os
+import os.path
 import re
 import textwrap
 import typing
 
 from flask import current_app
-from werkzeug.datastructures import FileStorage
-from werkzeug.utils import secure_filename
 
 from interpersonal.errors import InterpersonalNotFoundError
 from interpersonal.sitetypes import base
-from interpersonal.util import extension_from_content_type
 
 
 _example_repo_posts = {
@@ -58,19 +57,44 @@ class HugoExampleBlog(base.HugoBase):
                         The key is the post slug, and the value is raw post content.
     media:              Media storage if collectmedia=False,
                         or the media staging area if collectmedia=True.
-                        The key is the media hash,
-                        and the value is a werkzeug.FileStorage object.
+                        The key is the media URI,
+                        and the value is a base.OpaqueFile object.
+                        Note that the media URI will be either the staging version
+                        (part of Interpersonal, hosted under /microblog/<blog name>/staging)
+                        or the mediadir version
+                        (part of the blog, hosted under the blog's mediaprefix).
     collectedmedia:     Permanent media storage if collectmedia=True, otherwise unused.
-                        The key is the post URI, and the value is a sub-dict,
-                        where the sub-key is the media hash,
-                        and the sub-value is a werkzeug.FileStorage object.
+                        The key is the final media URI, and the value a base.OpaqueFile object.
+                        Note that the final media URI is hosted on the blog itself
+                        somewhere under /<slugprefix>/<post slug>/....
+
+    TODO: Make this an actual webserver so that it can really serve a blog?
+    TODO: At least serve media?
+    TODO: remove the .media and .collectedmedia members, and just use the filesystem
     """
 
-    def __init__(self, name, uri, slugprefix, mediaprefix, collectmedia=False):
+    def __init__(
+        self,
+        name,
+        uri,
+        interpersonal_uri,
+        slugprefix,
+        mediaprefix,
+        collectmedia=False,
+        mediastaging=None,
+    ):
         self.posts: typing.Dict[str, str] = _example_repo_posts
-        self.media: typing.Dict[str, FileStorage] = {}
-        self.collectedmedia: typing.Dict[str, FileStorage] = {}
-        super().__init__(name, uri, slugprefix, mediaprefix, collectmedia=collectmedia)
+        self.media: typing.Dict[str, base.OpaqueFile] = {}
+        self.collectedmedia: typing.Dict[str, base.OpaqueFile] = {}
+        super().__init__(
+            name,
+            uri,
+            interpersonal_uri,
+            slugprefix,
+            mediaprefix,
+            collectmedia=collectmedia,
+            mediastaging=mediastaging,
+        )
 
     def _get_raw_post_body(self, uri: str) -> str:
         path = re.sub(re.escape(self.baseuri), "", uri)
@@ -84,34 +108,47 @@ class HugoExampleBlog(base.HugoBase):
         return f"{self.baseuri}{ppath}"
 
     def _add_media(
-        self, media: typing.List[FileStorage]
+        self, media: typing.List[base.OpaqueFile]
     ) -> typing.List[base.AddedMediaItem]:
         items: typing.List[base.AddedMediaItem] = []
         for item in media:
-            uri = self._media_item_uri(item)
-            extant = uri in self.media
-            if not extant:
+            if self.collectmedia:
+                uri = self._media_item_uri_staging(item)
+                media_parent_dir = f"{self.mediastaging}"
+            else:
+                uri = self._media_item_uri_mediadir(item)
+                media_parent_dir = f"{self.mediastaging}/{self.mediaprefix}"
+            file_parent_dir = os.path.join(media_parent_dir, item.hexdigest)
+            item_path = os.path.join(file_parent_dir, item.filename)
+            os.makedirs(file_parent_dir, exist_ok=True)
+            if os.path.exists(item_path):
+                created = False
+            else:
+                with open(item_path, "wb") as fp:
+                    fp.write(item.contents)
                 self.media[uri] = item
-            items.append(base.AddedMediaItem(uri, not extant))
+                created = True
+            items.append(base.AddedMediaItem(uri, created))
         return items
 
     def _collect_media_for_post(
         self, postslug: str, postbody: str, media: typing.List[str]
-    ):
-        # TODO: update the post body with the new image URIs
-        if postslug not in self.collectedmedia:
-            self.collectedmedia[postslug] = {}
-        for uri in media:
+    ) -> str:
+        for staging_uri in media:
 
-            if not uri.startswith(self.baseuri):
+            if not staging_uri.startswith(self.interpersonal_uri):
                 current_app.logger.debug(
-                    f"Media collection will skip URI '{uri}' as it is not prefixed with what we expect '{self.baseuri}'."
+                    f"Media collection will skip URI '{staging_uri}' as it is not prefixed with what we expect '{self.interpersonal_uri}'."
                 )
                 continue
 
-            if uri not in self.media:
+            if staging_uri not in self.media:
                 raise InterpersonalNotFoundError(
-                    f"Media item from URI {uri} has not been saved"
+                    f"Media item from URI {staging_uri} has not been saved"
                 )
-            item = self.media[uri]
-            self.collectedmedia[postslug][uri] = item
+
+            new_uri = self._media_item_uri_collected(postslug, staging_uri)
+            self.collectedmedia[new_uri] = self.media[staging_uri]
+            postbody = re.sub(re.escape(staging_uri), new_uri, postbody)
+
+        return postbody

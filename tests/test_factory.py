@@ -14,14 +14,17 @@ def test_config():
     """
     db_fd, db_path = tempfile.mkstemp()
     conf_fd, conf_path = tempfile.mkstemp()
+    media_staging_path = tempfile.mkdtemp()
 
     appconfig_str = textwrap.dedent(
-        """
+        f"""\
         ---
         loglevel: DEBUG
         database: {db_path}
         password: whatever
         cookie_secret_key: whocaresman
+        uri: http://interpersonal.example.net
+        mediastaging: {media_staging_path}
         blogs:
         - name: example
           type: built-in example

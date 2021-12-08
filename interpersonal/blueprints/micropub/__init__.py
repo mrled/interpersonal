@@ -4,8 +4,8 @@ Kept separate from indieauth, but note that it must know of the indieauth token
 endpoint in advance, so there is some coupling.
 """
 
-import datetime
 import json
+import os.path
 import re
 import typing
 from urllib.parse import unquote
@@ -17,6 +17,7 @@ from flask import (
     jsonify,
     render_template,
     request,
+    send_from_directory,
     url_for,
 )
 from flask.wrappers import Response
@@ -395,6 +396,16 @@ def micropub_blog_media(blog_name):
     resp.headers["Location"] = added.uri
     resp.status_code = 201 if added.created else 200
     return resp
+
+
+@bp.route("/<blog_name>/staging/<path:path>", methods=["GET"])
+def micropub_blog_staging(blog_name, path):
+    """The per-blog temporary media staging endpoint
+
+    Blogs can be configured to save media here temporarily until a post is created.
+    """
+    blog_media_staging = os.path.join(current_app.config["MEDIASTAGING"], blog_name)
+    return send_from_directory(blog_media_staging, path)
 
 
 @bp.route("/authorized/github")
