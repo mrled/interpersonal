@@ -55,15 +55,15 @@ class HugoExampleBlog(base.HugoBase):
 
     posts:              A dictionary of posts.
                         The key is the post slug, and the value is raw post content.
-    media:              Media storage if collectmedia=False,
-                        or the media staging area if collectmedia=True.
+    media:              Media storage.
+                        TODO: rethink this, now that media can just be stored in staging area?
                         The key is the media URI,
                         and the value is a base.OpaqueFile object.
                         Note that the media URI will be either the staging version
                         (part of Interpersonal, hosted under /microblog/<blog name>/staging)
                         or the mediadir version
                         (part of the blog, hosted under the blog's mediaprefix).
-    collectedmedia:     Permanent media storage if collectmedia=True, otherwise unused.
+    collectedmedia:     Permanent media storage if mediastaging is set, otherwise unused.
                         The key is the final media URI, and the value a base.OpaqueFile object.
                         Note that the final media URI is hosted on the blog itself
                         somewhere under /<slugprefix>/<post slug>/....
@@ -79,9 +79,9 @@ class HugoExampleBlog(base.HugoBase):
         uri,
         interpersonal_uri,
         slugprefix,
-        mediaprefix,
-        collectmedia=False,
-        mediastaging=None,
+        *,
+        mediaprefix="",
+        mediastaging="",
     ):
         self.posts: typing.Dict[str, str] = _example_repo_posts
         self.media: typing.Dict[str, base.OpaqueFile] = {}
@@ -91,8 +91,7 @@ class HugoExampleBlog(base.HugoBase):
             uri,
             interpersonal_uri,
             slugprefix,
-            mediaprefix,
-            collectmedia=collectmedia,
+            mediaprefix=mediaprefix,
             mediastaging=mediastaging,
         )
 
@@ -112,10 +111,12 @@ class HugoExampleBlog(base.HugoBase):
     ) -> typing.List[base.AddedMediaItem]:
         items: typing.List[base.AddedMediaItem] = []
         for item in media:
-            if self.collectmedia:
+            if self.mediastaging:
                 uri = self._media_item_uri_staging(item)
                 media_parent_dir = f"{self.mediastaging}"
             else:
+                # TODO: This is broken in Dedicated Media Location Mode
+                # ... there will be no self.mediastaging directory
                 uri = self._media_item_uri_mediadir(item)
                 media_parent_dir = f"{self.mediastaging}/{self.mediaprefix}"
             file_parent_dir = os.path.join(media_parent_dir, item.hexdigest)

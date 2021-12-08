@@ -11,12 +11,10 @@ blogs:
     type: built-in example
     uri: https://example.com/
     slugprefix: /blog
-    mediaprefix: /media
   # - name: interpersonal-test
   #   type: github
   #   uri: https://interpersonal-test-blog.netlify.app/
   #   slugprefix: /blog
-  #   mediaprefix: /media
   #   github_owner: mrled
   #   github_repo: interpersonal-test-blog
   #   github_app_id: 1234567890

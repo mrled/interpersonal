@@ -13,7 +13,11 @@ from flask import current_app
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from interpersonal.errors import MicropubDuplicatePostError, MicropubInvalidRequestError
+from interpersonal.errors import (
+    InterpersonalConfigurationError,
+    MicropubDuplicatePostError,
+    MicropubInvalidRequestError,
+)
 from interpersonal.util import CaseInsensitiveDict, extension_from_content_type
 
 
@@ -182,20 +186,24 @@ class HugoBase:
     About media:
     (TODO: Test this)
     This class and its subclasses can operate in one of two modes:
-    - With a dedicated media dur, such that media gets served out of
-      https://your-blog.example.com/<media prefix>/<media hash>/<filename>.jpeg.
-      When media is uploaded, it is added to this final location immediately.
-      Requirements:
-        - `mediaprefix` argument, which must match the `<media prefix>` URI path component above
-        - `collectmedia` set to `False`
-    - By accepting uploaded media, staging it within Interpersonal itself,
-      and "collecting" it into the post directory when the post is created.
-      In staging the media item will have a URI like
-      `https://your-interpersonal.example.com/micropub/your-blog/staging/<media hash>/</filename>.jpeg`
-      and when collected it will be moved underneath the post directory to have a URI like
-      `https://your-blog.example.com/posts/post-one/<media hash>/<filename>.jpeg`.
-      Requirements:
-        - `collectmedia` set to `True`
+
+    - Dedicated Media Location Mode.
+      Media is saved to some dedicated space, not connected to the post that references it.
+      In this mode, media is accessible via a URI like
+      `https://your-blog.example.com/<mediaprefix>/<hash>/<filename>.jpeg`.
+      When media is uploaded, it is added to the blog backend (e.g. Github) immediately.
+      To enable this mode, set `mediaprefix` and do not set `mediastaging`.
+
+    - Staged Media Mode.
+      Media is staged by Interpersonal itself, and when a post is created that references it,
+      the post and media are saved to the blog backend (e.g. uploaded to Github) at the same time.
+      In this mode, media is saved next to the post that references it.
+      This means that on initial upload, media will have a URI from Interpersonal, like
+      `https://interpersonal.example.com/microblog/your-blog/staging/<hash>/<filename>.jpeg`,
+      and only when the post is created will it have a URI from your blog,
+      which will be under the post that references it, like
+      `https://your-blog.example.com/<slugprefix>/<post slug>/<hash>/<filename>.jpeg`.
+      To enable this mode, set `mediastaging` and do not set `mediaprefix`.
 
     name:               The name of the blog.
     baseuri:            The base URI of the blog, like https://blog.example.com/
@@ -207,10 +215,8 @@ class HugoBase:
     mediaprefix:        Prefix for blog media.
                         E.g. "/media/" or "/uploads".
                         Leading or trailing slash characters ("/") are stripped.
-    collectmedia:       If true, if a post has media, move that media into the post's directory
-                        after the post is uploaded.
-    mediastaging:       Optional location for a media staging area.
-                        Only used if collectmedia=True.
+    mediastaging:       Optional location on the local filesystem for a media staging area.
+                        E.g. "/var/www/interpersonal/mediastaging".
     """
 
     def __init__(
@@ -219,16 +225,19 @@ class HugoBase:
         baseuri: str,
         interpersonal_uri: str,
         slugprefix: str,
-        mediaprefix: str,
-        collectmedia: bool = False,
-        mediastaging: typing.Optional[str] = None,
+        *,
+        mediaprefix: str = "",
+        mediastaging: str = "",
     ):
+        if (mediaprefix and mediastaging) or not (mediaprefix or mediastaging):
+            raise InterpersonalConfigurationError(
+                "Must pass exactly one of 'mediaprefix' or 'mediastaging'"
+            )
         self.name = name
         self.baseuri = normalize_baseuri(baseuri)
         self.interpersonal_uri = normalize_baseuri(interpersonal_uri)
         self.slugprefix = slugprefix.strip("/")
         self.mediaprefix = mediaprefix.strip("/")
-        self.collectmedia = collectmedia
         self.mediastaging = mediastaging
         self.dirs = HugoDirectories("content", "static")
 
@@ -266,7 +275,7 @@ class HugoBase:
         frontmatter:        Post frontmatter
         content:            Post body
         media:              A list of URIs representing associated media, if any.
-                            If collectmedia is True, this will trigger that behavior.
+                            If mediastaging is set, this function will trigger media collection.
 
         Returns the URI for the post.
         """
@@ -292,7 +301,7 @@ class HugoBase:
         if oldpost is not None:
             raise MicropubDuplicatePostError(uri=posturi)
 
-        if media and self.collectmedia:
+        if media and self.mediastaging:
             post_raw_str = self._collect_media_for_post(slug, post.tostr(), media)
         else:
             post_raw_str = post.tostr()
@@ -401,7 +410,7 @@ class HugoBase:
 
         Blogs wanting to keep a post's related media in its own folder would do the latter,
         and posts would reference media by relative path.
-        These blogs should set collectmedia to True,
+        These blogs should set 'mediastaging' to a directory,
         and also implement the _collect_media_for_post() method (see below).
         """
         raise NotImplementedError("Please implement this in the subclass")
@@ -422,7 +431,7 @@ class HugoBase:
         To implement it, move/rename the media from the temporary media storage location
         to the permanent location relative to the blog post.
 
-        Blogs implementing this should pass collectmedia=True when they are instantiated.
+        Blogs implementing this should set 'mediastaging' when they are instantiated.
 
         postslug:       The slug of the post, after it has been submitted.
         postbody:       The raw string body of the post.
@@ -436,10 +445,10 @@ class HugoBase:
         """
         raise NotImplementedError("Please implement this in the subclass")
 
-    def _media_item_uri_mediadir(self, slug: str, media_item: OpaqueFile) -> str:
+    def _media_item_uri_mediadir(self, media_item: OpaqueFile) -> str:
         """Get the URI for an item relative to the media dir
 
-        For sites that use collectmedia=False.
+        For sites that use Staged Media Mode.
         This is the permanent URI, and it does not change after being uploaded.
         """
         return f"{self.baseuri}{self.mediaprefix}/{media_item.hexdigest}/{media_item.filename}"
@@ -447,7 +456,7 @@ class HugoBase:
     def _media_item_uri_staging(self, media_item: OpaqueFile) -> str:
         """Get the staging URI for a media item
 
-        For sites that use collectmedia=True.
+        For sites that use Staged Media Mode.
         Return a temporary URI that is valid until media is collected.
         """
         return f"{self.interpersonal_uri}micropub/{self.name}/staging/{media_item.hexdigest}/{media_item.filename}"
@@ -457,7 +466,7 @@ class HugoBase:
     ) -> str:
         """Get the post-collection URI (under a particular post) for a media item
 
-        For sites that use collectmedia=True.
+        For sites that use Staged Media Mode.
         This is the permanent URI, but images are not available at this URI
         until after _collect_media_for_post() is called.
 
@@ -491,12 +500,9 @@ class HugoBase:
         and also implement ._collect_media(), which is called after a post is created,
         and which will move media from the staging implementation to the final location.
 
-        Using this method requires both collectmedia=True and tempmediapath=/somewhere...
-        in the blog's configuration.
+        For sites that use Staged Media Mode.
         """
 
-        if not self.collectmedia:
-            raise Exception(f"collectmedia was not set to true for blog {self.name}")
         if not self.mediastaging:
             raise Exception(f"mediastaging was not set for blog {self.blog}")
         if not os.path.isdir(self.mediastaging):
@@ -517,7 +523,7 @@ class HugoBase:
                 os.makedirs(parent)
                 with open(path, "wb") as fp:
                     fp.write(item.contents)
-                uri = f"{self.interpersonal_uri}micropub/{self.name}/media/{digest}/{item.filename}"
+            uri = f"{self.interpersonal_uri}micropub/{self.name}/media/{digest}/{item.filename}"
             result.append(AddedMediaItem(uri, created))
 
         return result

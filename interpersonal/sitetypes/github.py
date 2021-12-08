@@ -199,14 +199,14 @@ class HugoGithubRepo(base.HugoBase):
         uri,
         interpersonal_uri,
         slugprefix,
-        mediaprefix,
         owner: str,
         repo: str,
         branch: str,
         github_app_id: str,
         private_key_pem: str,
-        collectmedia=None,
-        mediastaging=None,
+        *,
+        mediastaging="",
+        mediaprefix="",
     ):
         self.owner = owner
         self.repo = repo
@@ -221,8 +221,7 @@ class HugoGithubRepo(base.HugoBase):
             uri,
             interpersonal_uri,
             slugprefix,
-            mediaprefix,
-            collectmedia=collectmedia,
+            mediaprefix=mediaprefix,
             mediastaging=mediastaging,
         )
 
@@ -348,7 +347,7 @@ class HugoGithubRepo(base.HugoBase):
         items: typing.List[base.AddedMediaItem] = []
         for item in media:
             relpath = f"{self.mediadir}/{item.hexdigest}/{item.filename}"
-            if self.collectmedia:
+            if self.mediastaging:
                 added = self._add_media_staging([item])
                 items += added
             else:
@@ -357,12 +356,19 @@ class HugoGithubRepo(base.HugoBase):
         return items
 
     def _delete_media(self, uris: typing.List[str]):
-        """Delete media from the server.
+        """Delete media from Github.
 
         Not required for the implementation, but useful for e2e tests.
 
         Assumes URIs are raw.githubusercontent.com URIs - NOT final published content URIs!
         Again, this is really just for testing.
+
+        TODO: Modify this to work in remote media dir mode, and make it a noop in local staging mode
+            Was originally written assuming that the media endpoint uploads directly to
+            a staging directory in the Github repo, and the files are later moved.
+            However, now when Interpersonal is in staging mode,
+            it holds media files temporarily on its own server,
+            so this is only useful in remote media dir mode.
         """
         for uri in uris:
             esc_uri_prefix = re.escape(

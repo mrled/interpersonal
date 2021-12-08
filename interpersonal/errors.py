@@ -143,3 +143,14 @@ class MicropubDuplicatePostError(Exception):
 class InterpersonalNotFoundError(Exception):
     def __interpersonal_exception_handler__(self):
         return json_error(404, "Not found", str(self))
+
+
+class InterpersonalConfigurationError(Exception):
+    def __init__(self, msg: str = ""):
+        self.msg = msg
+
+    def __str__(self):
+        return self.msg
+
+    def __interpersonal_exception_handler__(self):
+        return json_error(500, "Configuration error", str(self))

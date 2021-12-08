@@ -174,17 +174,28 @@ def test_e2e_github_microblog_create_post(
             raise
 
 
+@pytest.mark.skip
 def test_e2e_github_media_endpoint_double_upload_and_delete(
     app: Flask,
     indieauthfix: IndieAuthActions,
     client: FlaskClient,
     testconstsfix: TestConsts,
 ):
+    """Test that a double-upload works as expected and then delete the result
+
+    Disabled for now because this test is only useful in remote media dir mode,
+    but the only testing we do is in local staging mode.
+
+    TODO: Add e2e test blog for remote media dir mode
+    TODO: Re-enable this test when there's a test blog in remote media dir mode
+    TODO: Add _delete_media() to the base class and have it work for staging mode
+    TODO: Test the base class's _delete_media() in another file (not an e2e test, really)
+    """
     with app.app_context():
         z2btd = indieauthfix.zero_to_bearer_with_test_data()
         headers = Headers()
         headers["Authorization"] = f"Bearer {z2btd.btoken}"
-        imguri = f"https://raw.githubusercontent.com/mrled/interpersonal-test-blog/master/content/static/media/{testconstsfix.img_mosaic.sha256}/github-ncsa-mosaic.png"
+        imguri = f"https://interpersonal.example.com/micropub/interpersonal-test-blog/media/{testconstsfix.img_mosaic.sha256}/github-ncsa-mosaic.png"
 
         # Test that the first upload works
         resp1 = client.post(

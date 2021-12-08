@@ -27,8 +27,6 @@ blogs:
     type: built-in example
     uri: {blog_uri}
     slugprefix: /blog
-    mediaprefix: /media
-    collectmedia: yes
   - name: {github_e2e_blog_name}
     type: github
     uri: {github_e2e_blog_uri}
@@ -38,8 +36,6 @@ blogs:
     github_app_id: {github_e2e_app_id}
     github_app_private_key: {github_e2e_app_private_key}
     slugprefix: /blog
-    mediaprefix: /media
-    collectmedia: yes
 """
 
 
