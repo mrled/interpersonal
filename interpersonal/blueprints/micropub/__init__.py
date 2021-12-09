@@ -90,11 +90,12 @@ def micropub_blog_endpoint_GET(blog_name: str):
 
     # The micropub endpoint configuration
     if q == "config":
+        media_endpoint = url_for(
+            ".micropub_blog_media", blog_name=blog.name, _external=True
+        )
         return jsonify(
             {
-                "media-endpoint": url_for(
-                    "micropub.micropub_blog_media", blog_name=blog.name
-                ),
+                "media-endpoint": media_endpoint,
             }
         )
 

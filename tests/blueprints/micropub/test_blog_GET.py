@@ -56,7 +56,10 @@ def test_micropub_blog_endpoint_GET_config(
         assert response.status_code == 200
         response_json = json.loads(response.data)
         assert "media-endpoint" in response_json
-        assert response_json["media-endpoint"] == "/micropub/example-blog/media"
+        assert (
+            response_json["media-endpoint"]
+            == "http://localhost/micropub/example-blog/media"
+        )
 
 
 def test_micropub_blog_endpoint_GET_source_valid_url(
