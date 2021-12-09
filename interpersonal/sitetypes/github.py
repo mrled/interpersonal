@@ -260,26 +260,32 @@ class HugoGithubRepo(base.HugoBase):
             raise exc
 
     def _get_raw_post_body(self, uri: str) -> base.HugoPostSource:
-        resp = self._logged_api(
-            r"/repos/{owner}/{repo}/contents/{path}",
-            "GET",
-            route=dict(owner=self.owner, repo=self.repo, path=self._uri2indexmd(uri)),
-        )
+        for indexname in ["index.md", "index.html"]:
+            indexpath = os.path.join(self._uri_to_post_bundle_dir(uri), indexname)
+            resp = self._get_repo_file_if_exists(indexpath)
+            if resp:
+                break
+        else:
+            raise InterpersonalNotFoundError
         content = base64.b64decode(resp["content"]).decode()
         current_app.logger.debug(
             f"_get_raw_post_body({uri}) found b64-decoded file contents of {content}"
         )
         return content
 
-    def _add_raw_post_body(self, slug: str, raw_body: str) -> str:
+    def _add_raw_post_body(self, slug: str, raw_body: str, body_type: str = "") -> str:
         ppath = self._post_path(slug)
+        if body_type == "html":
+            filename = "index.html"
+        else:
+            filename = "index.md"
         self._logged_api(
             r"/repos/{owner}/{repo}/contents/{path}",
             "PUT",
             route=dict(
                 owner=self.owner,
                 repo=self.repo,
-                path=f"{self.dirs.content}/{ppath}/index.md",
+                path=f"{self.dirs.content}/{ppath}/{filename}",
             ),
             data={
                 "message": f"Creating post for {slug} from Interpersonal",

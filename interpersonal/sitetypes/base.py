@@ -241,18 +241,21 @@ class HugoBase:
         self.mediastaging = mediastaging
         self.dirs = HugoDirectories("content", "static")
 
-    def _uri2indexmd(self, uri) -> str:
-        """Map a URI to an index.md in the Hugo source.
+    def _uri_to_post_bundle_dir(self, uri) -> str:
+        """Map a URI to a post's bundle directory in the Hugo source.
 
         This requries the canonical URI, not any kind of alias.
+
+        Note that it returns just a directory like content/post_slug/,
+        and doesn't include any index.md or index.html etc.
         """
         baseuri_escd = re.escape(self.baseuri)
         baseuri_re = f"^{baseuri_escd}/*"
-        hugo_bundle_path = re.sub(baseuri_re, "", uri)
-        if hugo_bundle_path.startswith("/"):
-            hugo_bundle_path = hugo_bundle_path[1:]
-        index = os.path.join("content", hugo_bundle_path, "index.md")
-        return index
+        hugo_bundle_subpath = re.sub(baseuri_re, "", uri)
+        if hugo_bundle_subpath.startswith("/"):
+            hugo_bundle_subpath = hugo_bundle_subpath[1:]
+        hugo_bundle_path = os.path.join("content", hugo_bundle_subpath)
+        return hugo_bundle_path
 
     def _get_raw_post_body(self, uri) -> str:
         """Subclasses must implement"""
@@ -267,6 +270,7 @@ class HugoBase:
         slug: str,
         frontmatter: typing.Dict,
         content: str,
+        body_type: str = "",
         media: typing.List[str] = None,
     ) -> str:
         """Add a new post
@@ -306,7 +310,7 @@ class HugoBase:
         else:
             post_raw_str = post.tostr()
 
-        result = self._add_raw_post_body(slug, post_raw_str)
+        result = self._add_raw_post_body(slug, post_raw_str, body_type=body_type)
 
         return result
 
@@ -317,6 +321,7 @@ class HugoBase:
         so we process it for Hugo first.
         """
         content = ""
+        content_type = ""
         frontmatter = {}
         slug = ""
         name = ""
@@ -333,14 +338,10 @@ class HugoBase:
                         raise MicropubInvalidRequestError(
                             "Unexpectedly multiple values in content dict"
                         )
-                    ctype, cval = list(unwrappedv.items())[0]
-                    if ctype == "html":
-                        content = cval
-                    elif ctype == "markdown":
-                        content = cval
-                    else:
+                    content_type, content = list(unwrappedv.items())[0]
+                    if content_type not in ["html", "markdown"]:
                         raise MicropubInvalidRequestError(
-                            f"Unexpected content type {ctype}"
+                            f"Unexpected content type {content_type}"
                         )
                 else:
                     content = unwrappedv
@@ -361,7 +362,9 @@ class HugoBase:
         media += props.get("video") or []
         media += props.get("audio") or []
 
-        return self.add_post(slug, frontmatter, content, media)
+        return self.add_post(
+            slug, frontmatter, content, body_type=content_type, media=media
+        )
 
     def add_media(self, media: typing.List[FileStorage]) -> typing.List[AddedMediaItem]:
         """Add one or more media files.
@@ -387,12 +390,19 @@ class HugoBase:
         """Given the slug of a post, return the full URI"""
         return f"{self.baseuri}{self._post_path(slug)}"
 
-    def _add_raw_post_body(self, slug: str, raw_body: str) -> str:
+    def _add_raw_post_body(self, slug: str, raw_body: str, body_type: str = "") -> str:
         """Given a raw string representing the post file body, save it to the backend
 
         Must be implemented by a subclass.
 
         Must return the URI of the post.
+
+        Arguments:
+        slug:           The slug of the post.
+        raw_body:       The raw string body of the post and any front matter.
+        body_type:      If the post content is typed, the type will be passed here.
+                        The post content may be untyped, in which case this string is empty.
+                        It may otherwise be "markdown" or "html".
         """
         raise NotImplementedError("Please implement this in the subclass")
 

@@ -101,7 +101,7 @@ class HugoExampleBlog(base.HugoBase):
             path = f"/{path}"
         return self.posts[path]
 
-    def _add_raw_post_body(self, slug: str, raw_body: str) -> str:
+    def _add_raw_post_body(self, slug: str, raw_body: str, body_type: str = "") -> str:
         ppath = self._post_path(slug)
         self.posts[f"/{ppath}"] = raw_body
         return f"{self.baseuri}{ppath}"
