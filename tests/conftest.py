@@ -10,10 +10,6 @@ from interpersonal import create_app
 from interpersonal import database
 
 
-TEST_SQL_DATA = """
-"""
-
-
 TEST_APPCONFIG_YAML_TEMPLATE = """
 ---
 loglevel: DEBUG
@@ -92,7 +88,6 @@ class TestDataFile:
 class TestConsts:
     login_password = "test-login-password-123X"
     cookie_secret_key = "test-cookie-secret-key-ASDF-1234"
-    sql_data = TEST_SQL_DATA
     interpersonal_uri = "https://interpersonal.example.com/"
     blog_uri = "https://blog.example.org/"
 
@@ -158,7 +153,6 @@ def app():
 
     with app.app_context():
         database.init_db()
-        database.get_db().executescript(TestConsts.sql_data)
 
     # Interpersonal expects that each blog's media staging path is created in advance
     for blog in app.config["APPCONFIG"].blogs:

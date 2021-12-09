@@ -1,24 +1,12 @@
-import collections
-import dataclasses
-import os
 import sqlite3
-import typing
 
 import click
 from flask import current_app, g
 from flask.cli import with_appcontext
 
 
-# <https://flask.palletsprojects.com/en/2.0.x/tutorial/database/>
-# g is a special object that is unique for each request. It is used to store data that might be accessed by multiple functions during the request. The connection is stored and reused instead of creating a new connection if get_db is called a second time in the same request.
-
-
 # TODO: authTokenUsed could be a foreign key?
 CREATE_DB_SCHEMA = """
-CREATE TABLE IF NOT EXISTS AppSettings(
-  key TEXT PRIMARY KEY,
-  value TEXT
-);
 
 CREATE TABLE IF NOT EXISTS AuthorizationCode(
   authorizationCode TEXT PRIMARY KEY,
@@ -43,16 +31,17 @@ CREATE TABLE IF NOT EXISTS BearerToken(
   revoked boolean DEFAULT FALSE
 );
 
-CREATE TABLE IF NOT EXISTS Blogs(
-  name TEXT PRIMARY KEY,
-  uri TEXT NOT NULL,
-  githubRepo TEXT NOT NULL,
-  githubToken TEXT NOT NULL
-);
 """
 
 
 def get_db():
+    """Get the database connection
+
+    Originally taken from the Flask tutorial
+    <https://flask.palletsprojects.com/en/2.0.x/tutorial/database/>
+    > g is a special object that is unique for each request. It is used to store data that might be accessed by multiple functions during the request. The connection is stored and reused instead of creating a new connection if get_db is called a second time in the same request.
+    """
+
     if "db" not in g:
         g.db = sqlite3.connect(
             current_app.config["DBPATH"], detect_types=sqlite3.PARSE_DECLTYPES
