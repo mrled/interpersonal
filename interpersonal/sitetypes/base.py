@@ -355,7 +355,11 @@ class HugoBase:
         if not slug:
             slug = slugify(name or content)
         if "date" not in props:
-            frontmatter["date"] = datetime.utcnow().strftime("%Y-%m-%d")
+            # We get UTC time here because there's no way to know the user's timezone.
+            # <https://stackoverflow.com/questions/13/determine-a-users-timezone>
+            # The Micropub client could ask for it, but there's no standard way
+            # to communicate it to the server AFAIK.
+            frontmatter["date"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S%z")
 
         media = []
         media += props.get("photo") or []
