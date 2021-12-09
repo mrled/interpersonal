@@ -25,7 +25,7 @@ def test_micropub_blog_endpoint_GET_auth(
         assert unauth_response.status_code == 401
         unauth_data_json = json.loads(unauth_response.data)
         assert unauth_data_json["error"] == "unauthorized"
-        assert unauth_data_json["error_description"] == "Missing Authorization header"
+        assert unauth_data_json["error_description"] == "No token was provided"
         assert b'"error":"unauthorized"' in unauth_response.data
 
         authheaders = Headers()

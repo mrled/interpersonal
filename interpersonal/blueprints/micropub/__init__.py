@@ -34,7 +34,6 @@ from interpersonal.errors import (
     AuthenticationProvidedTwiceError,
     MicropubInsufficientScopeError,
     MicropubInvalidRequestError,
-    MissingBearerAuthHeaderError,
     MissingBearerTokenError,
     catchall_error_handler,
     json_error,
@@ -60,26 +59,12 @@ def index():
     return render_template("micropub.index.html.j2", blogs=blogs)
 
 
-def bearer_verify_token_from_auth_header(auth_header: str, me: str):
-    """Given an Authorization header, verify the token.
-
-    Return a VerifiedBearerToken.
-
-    Raises exceptions if verification fails.
-    """
+def get_auth_header_token(auth_header: str) -> str:
+    """Retrieve the bearer token from the authentication header"""
     if not auth_header:
-        raise MissingBearerAuthHeaderError()
-
+        return ""
     token = re.sub("Bearer ", "", auth_header)
-    if not token:
-        raise MissingBearerTokenError()
-
-    verified = bearer_verify_token(token, me)
-    current_app.logger.debug(
-        f"Successfully verified token {token} for owner {verified['me']} using client {verified['client_id']} authorized for scope {verified['scopes']}"
-    )
-
-    return verified
+    return token
 
 
 @bp.route("/<blog_name>", methods=["GET"])
@@ -93,9 +78,11 @@ def micropub_blog_endpoint_GET(blog_name: str):
     """
     blog = current_app.config["APPCONFIG"].blog(blog_name)
 
-    verified = bearer_verify_token_from_auth_header(
-        request.headers.get("Authorization"), blog.baseuri
-    )
+    auth_header = request.headers.get("Authorization")
+    token = get_auth_header_token(auth_header)
+    if not token:
+        raise MissingBearerTokenError()
+    verified = bearer_verify_token(token, blog.baseuri)
 
     q = request.args.get("q")
 
@@ -162,9 +149,18 @@ def authenticate_POST(
         or content_type.startswith("multipart/form-data")
     )
     body_access_token = processed_req_body.get("access_token")
+    auth_header_token = get_auth_header_token(req_headers.get("Authorization"))
 
-    if req_headers.get("Authorization") and body_access_token:
-        raise AuthenticationProvidedTwiceError
+    # For future reference: see docs for AuthenticationProvidedTwiceError exception
+    # if auth_header and body_access_token:
+    #     raise AuthenticationProvidedTwiceError
+
+    if (
+        auth_header_token
+        and body_access_token
+        and auth_header_token != body_access_token
+    ):
+        raise AuthenticationProvidedTwiceError(auth_header_token, body_access_token)
     elif form_encoded and body_access_token:
         current_app.logger.debug(
             f"authenticate_POST(): Using access_token from form..."
@@ -172,9 +168,11 @@ def authenticate_POST(
         verified = bearer_verify_token(body_access_token, blog.baseuri)
     else:
         current_app.logger.debug(f"authenticate_POST(): Using Authorization header...")
-        verified = bearer_verify_token_from_auth_header(
-            req_headers.get("Authorization"), blog.baseuri
-        )
+        auth_header_token = request.headers.get("Authorization")
+        token = get_auth_header_token(auth_header_token)
+        if not token:
+            raise MissingBearerTokenError()
+        verified = bearer_verify_token(token, blog.baseuri)
     return verified
 
 

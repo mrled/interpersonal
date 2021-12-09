@@ -505,10 +505,7 @@ class HugoBase:
 
         if not self.mediastaging:
             raise Exception(f"mediastaging was not set for blog {self.blog}")
-        if not os.path.isdir(self.mediastaging):
-            raise Exception(
-                f"Media staging path {self.mediastaging} does not exist (or is not a directory)"
-            )
+        os.makedirs(self.mediastaging, exist_ok=True)
 
         result: typing.List[AddedMediaItem] = []
         for item in media:

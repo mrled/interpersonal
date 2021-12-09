@@ -6,11 +6,11 @@ like authentication etc.
 
 import io
 import json
-import os
 
+import pytest
 from flask.app import Flask
 from flask.testing import FlaskClient
-from werkzeug.datastructures import FileStorage, Headers
+from werkzeug.datastructures import Headers
 
 from tests.conftest import IndieAuthActions, TestConsts
 
@@ -29,10 +29,7 @@ def test_micropub_blog_endpoint_POST_unauth_fails(
             assert unauth_response.status_code == 401
             unauth_response_json = json.loads(unauth_response.data)
             assert unauth_response_json["error"] == "unauthorized"
-            assert (
-                unauth_response_json["error_description"]
-                == "Missing Authorization header"
-            )
+            assert unauth_response_json["error_description"] == "No token was provided"
         except BaseException:
             print(f"Failing test. Response body: {unauth_response.data}")
             raise
@@ -117,7 +114,7 @@ def test_json_body_authentication(
         assert resp.status_code == 401
         respjson = json.loads(resp.data)
         assert respjson["error"] == "unauthorized"
-        assert respjson["error_description"] == "Missing Authorization header"
+        assert respjson["error_description"] == "No token was provided"
 
 
 def test_missing_content_type_fails(
@@ -273,6 +270,9 @@ def test_scope_invalid(app: Flask, indieauthfix: IndieAuthActions, client: Flask
             raise
 
 
+# Skipping this test for now
+# See docs for AuthenticationProvidedTwiceError exception
+@pytest.mark.skip
 def test_auth_headers_and_form_body_fails(
     app: Flask,
     indieauthfix: IndieAuthActions,
@@ -334,7 +334,7 @@ def test_form_body_auth_doesnt_work_with_wrong_name(
             assert resp.status_code == 401
             respjson = json.loads(resp.data)
             assert respjson["error"] == "unauthorized"
-            assert respjson["error_description"] == "Missing Authorization header"
+            assert respjson["error_description"] == "No token was provided"
         except BaseException:
             print(f"Failing test. Response body: {resp.data}")
             raise

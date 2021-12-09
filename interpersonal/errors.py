@@ -82,16 +82,28 @@ class InvalidBearerTokenError(Exception):
         return json_error(401, "unauthorized", f"Invalid bearer token '{self.token}'")
 
 
-class MissingBearerAuthHeaderError(Exception):
-    def __interpersonal_exception_handler__(self):
-        return json_error(401, "unauthorized", "Missing Authorization header")
-
-
 class AuthenticationProvidedTwiceError(Exception):
+    """Error indicating that authentication was provided twice.
+
+    Providing authentication twice is supposedly incorrect.
+    micropub.rocks has test 805 for it.
+    However, at least one major client, Quill, does provide it twice sometimes.
+
+    To account for this, only throw this exception if both are provided but do not match.
+    """
+
+    def __init__(self, auth_header_token, body_access_token):
+        self.auth_header_token = auth_header_token
+        self.body_access_token = body_access_token
+
+    def __str__(self):
+        return f"Token provided both in the Authentication header ({self.auth_header_token} and the request body ({self.body_access_token})."
+
     def __interpersonal_exception_handler__(self):
+        current_app.logger.exception(self)
         return json_error(
-            401,
-            "unauthorized",
+            400,
+            "bad_request",
             "Authentication was provided both in HTTP headers and request body",
         )
 

@@ -3,6 +3,7 @@
 import hashlib
 import json
 
+import pytest
 from flask.app import Flask
 from flask.testing import FlaskClient
 from werkzeug.datastructures import Headers, MultiDict
@@ -30,7 +31,7 @@ def test_media_endpoint_no_auth_fails(
         try:
             assert resp.status_code == 401
             respjson = json.loads(resp.data)
-            assert respjson["error_description"] == "Missing Authorization header"
+            assert respjson["error_description"] == "No token was provided"
         except BaseException:
             print(f"Failing test. Response body: {resp.data}")
             raise
@@ -55,7 +56,7 @@ def test_media_endpoint_wrong_auth_fails(
         try:
             assert resp.status_code == 401
             respjson = json.loads(resp.data)
-            assert respjson["error_description"] == "Missing Authorization header"
+            assert respjson["error_description"] == "No token was provided"
         except BaseException:
             print(f"Failing test. Response body: {resp.data}")
             raise
@@ -110,6 +111,9 @@ def test_media_endpoint_auth_in_body_succeeds(
             raise
 
 
+# Skipping this test for now
+# See docs for AuthenticationProvidedTwiceError exception
+@pytest.mark.skip
 def test_media_endpoint_auth_in_both_fails(
     app: Flask,
     indieauthfix: IndieAuthActions,
