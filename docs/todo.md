@@ -4,8 +4,19 @@ Bigger todo items that need some explication
 
 ## Misc
 
-* Currently Interpersonal has to map URLs to files sort of hackily, by replacing `https://example.com/` with `content/` in the uri. A site could publish metadata at every url, or at some derivable location (e.g `${url}/.metadata`) that obviates this.
 * Uploads are probably not as efficient as they should be. Should I be worried about keeping the whole upload in RAM so I can hash then actually save it?
+
+## Write a Hugo utility theme to map all URIs directly to the files that back them
+
+Currently Interpersonal has to map URLs to files sort of hackily, by replacing `https://example.com/` with `content/` in the uri. A site could publish metadata at every url, or at some derivable location (e.g `${url}/.metadata`) that obviates this. This would be easy with Hugo, mapping all URIs directly to the files that back them. This could be saved in JSON and then referenced from anywhere.
+
+I've also just discovered that I'll need to sometimes use `index.html` rather than `index.md`, as some posts are submitted as HTML and if Hugo is not told they are HTML, they'll get truncated or otherwise misinterpreted by Hugo's Markdown processor. This means that instead of just a single HTTP request to Github (or whatever storage backend we're using), we need to try all the `index.*` names one after the other until we find the one that we're looking for.
+
+If we write a modular utility theme that creates a JSON data file mapping URIs to their index pages.
+
+A guide for using this Hugo functionality is here: [Build a JSON API With Hugo's Custom Output Formats](https://forestry.io/blog/build-a-json-api-with-hugo/).
+
+Might consider working with the authors of IndieKit and/or other static site connectors.
 
 ## Describe (and prototype?) basic Hugo theme that works well with Micropub expectations
 
