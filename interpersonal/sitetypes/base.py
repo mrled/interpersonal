@@ -12,6 +12,7 @@ import yaml
 from flask import current_app
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
+from interpersonal.configuration.basetypes import SiteSectionMap
 
 from interpersonal.errors import (
     InterpersonalConfigurationError,
@@ -202,16 +203,15 @@ class HugoBase:
       `https://interpersonal.example.com/microblog/your-blog/staging/<hash>/<filename>.jpeg`,
       and only when the post is created will it have a URI from your blog,
       which will be under the post that references it, like
-      `https://your-blog.example.com/<slugprefix>/<post slug>/<hash>/<filename>.jpeg`.
+      `https://your-blog.example.com/<post section>/<post slug>/<hash>/<filename>.jpeg`.
       To enable this mode, set `mediastaging` and do not set `mediaprefix`.
 
     name:               The name of the blog.
     baseuri:            The base URI of the blog, like https://blog.example.com/
     interpersonal_uri:  The base URI of interpersonal itself,
                         like https://interpersonal.example.com/.
-    slugprefix:         Prefix for new post slugs, if any.
-                        E.g. "/posts/" or "/articles" or "/blog".
-                        Leading or trailing slash characters ("/") are stripped.
+    sectionmap:         Mapping for post types to Hugo sections.
+                        See docs/sectionmap.md for more details.
     mediaprefix:        Prefix for blog media.
                         E.g. "/media/" or "/uploads".
                         Leading or trailing slash characters ("/") are stripped.
@@ -224,7 +224,7 @@ class HugoBase:
         name: str,
         baseuri: str,
         interpersonal_uri: str,
-        slugprefix: str,
+        sectionmap: SiteSectionMap,
         *,
         mediaprefix: str = "",
         mediastaging: str = "",
@@ -236,7 +236,7 @@ class HugoBase:
         self.name = name
         self.baseuri = normalize_baseuri(baseuri)
         self.interpersonal_uri = normalize_baseuri(interpersonal_uri)
-        self.slugprefix = slugprefix.strip("/")
+        self.sectionmap = sectionmap
         self.mediaprefix = mediaprefix.strip("/")
         self.mediastaging = mediastaging
         self.dirs = HugoDirectories("content", "static")
@@ -270,6 +270,7 @@ class HugoBase:
         slug: str,
         frontmatter: typing.Dict,
         content: str,
+        section: str,
         body_type: str = "",
         media: typing.List[str] = None,
     ) -> str:
@@ -293,7 +294,7 @@ class HugoBase:
         # TODO: This should probably be more complicated
         # Each blog should probably define how slugs should be handled -
         # require the client to send it, generate it from title/content, generate it from the date, something else?
-        posturi = self._post_uri(slug)
+        posturi = self._post_uri(slug, section)
         oldpost = None
         try:
             oldpost = self.get_post(posturi)
@@ -306,11 +307,15 @@ class HugoBase:
             raise MicropubDuplicatePostError(uri=posturi)
 
         if media and self.mediastaging:
-            post_raw_str = self._collect_media_for_post(slug, post.tostr(), media)
+            post_raw_str = self._collect_media_for_post(
+                slug, post.tostr(), section, media
+            )
         else:
             post_raw_str = post.tostr()
 
-        result = self._add_raw_post_body(slug, post_raw_str, body_type=body_type)
+        result = self._add_raw_post_body(
+            slug, post_raw_str, section, body_type=body_type
+        )
 
         return result
 
@@ -325,6 +330,7 @@ class HugoBase:
         frontmatter = {}
         slug = ""
         name = ""
+        section = self.sectionmap.default
         props = mf2obj["properties"]
         for k, v in props.items():
             if k == "content":
@@ -361,13 +367,16 @@ class HugoBase:
             # to communicate it to the server AFAIK.
             frontmatter["date"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S%z")
 
+        if "bookmark-of" in frontmatter:
+            section = "bookmark"
+
         media = []
         media += props.get("photo") or []
         media += props.get("video") or []
         media += props.get("audio") or []
 
         return self.add_post(
-            slug, frontmatter, content, body_type=content_type, media=media
+            slug, frontmatter, content, section, body_type=content_type, media=media
         )
 
     def add_media(self, media: typing.List[FileStorage]) -> typing.List[AddedMediaItem]:
@@ -378,23 +387,27 @@ class HugoBase:
         processed_media = [OpaqueFile(m) for m in media]
         return self._add_media(processed_media)
 
-    def _post_path(self, slug: str) -> str:
+    def _post_path(self, slug: str, section: str) -> str:
         """Given a slug of a post, return the full path.
 
         Does not include an initial or trailing /
         """
         if slug.startswith("/"):
+            # Slug should never start with a slash, can we remove this? Logging for now...
+            current_app.logger.warn(
+                f"In HugoBase._post_path(), was passed a slug '{slug}' which improperly begins with a slash"
+            )
             slug = slug[1:]
-        if self.slugprefix:
-            return f"{self.slugprefix}/{slug}"
-        else:
-            return f"{slug}"
 
-    def _post_uri(self, slug: str) -> str:
-        """Given the slug of a post, return the full URI"""
-        return f"{self.baseuri}{self._post_path(slug)}"
+        sec_val = self.sectionmap.get(section)
+        return f"{sec_val}/{slug}"
 
-    def _add_raw_post_body(self, slug: str, raw_body: str, body_type: str = "") -> str:
+    def _post_uri(self, slug: str, section: str) -> str:
+        return f"{self.baseuri}{self._post_path(slug, section)}"
+
+    def _add_raw_post_body(
+        self, slug: str, raw_body: str, section: str, body_type: str = ""
+    ) -> str:
         """Given a raw string representing the post file body, save it to the backend
 
         Must be implemented by a subclass.
@@ -404,6 +417,7 @@ class HugoBase:
         Arguments:
         slug:           The slug of the post.
         raw_body:       The raw string body of the post and any front matter.
+        section:        The Hugo section the post should be placed in.
         body_type:      If the post content is typed, the type will be passed here.
                         The post content may be untyped, in which case this string is empty.
                         It may otherwise be "markdown" or "html".
@@ -430,7 +444,7 @@ class HugoBase:
         raise NotImplementedError("Please implement this in the subclass")
 
     def _collect_media_for_post(
-        self, postslug: str, postbody: str, media: typing.List[str]
+        self, postslug: str, postbody: str, section: str, media: typing.List[str]
     ) -> str:
         """Collect media for a post into the post's directory
 
@@ -450,6 +464,8 @@ class HugoBase:
         postslug:       The slug of the post, after it has been submitted.
         postbody:       The raw string body of the post.
                         This is the raw representation of the post, including frontmatter etc.
+        section:        The section of the site that the post belongs to.
+                        See also the .sectionmap property of this class.
         media:          A list of URIs to media as returned from _add_media().
                         Implementations must know how to convert those URLs to the real location;
                         e.g. a Github backend must know how to convert a raw.githubusercontent...
@@ -476,7 +492,7 @@ class HugoBase:
         return f"{self.interpersonal_uri}micropub/{self.name}/staging/{media_item.hexdigest}/{media_item.filename}"
 
     def _media_item_uri_collected(
-        self, slug: str, media_item: typing.Union[OpaqueFile, str]
+        self, slug: str, section: str, media_item: typing.Union[OpaqueFile, str]
     ) -> str:
         """Get the post-collection URI (under a particular post) for a media item
 
@@ -495,7 +511,7 @@ class HugoBase:
         else:
             digest = media_item.hexdigest
             filename = media_item.filename
-        return f"{self.baseuri}{self.slugprefix}/{slug}/{digest}/{filename}"
+        return f"{self.baseuri}{section}/{slug}/{digest}/{filename}"
 
     def _add_media_staging(
         self, media: typing.List[OpaqueFile]

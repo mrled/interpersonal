@@ -22,7 +22,9 @@ blogs:
   - name: example-blog
     type: built-in example
     uri: {blog_uri}
-    slugprefix: /blog
+    sectionmap:
+        default: blog
+        bookmark: bookmarks
   - name: {github_e2e_blog_name}
     type: github
     uri: {github_e2e_blog_uri}
@@ -31,7 +33,9 @@ blogs:
     github_repo_branch: master
     github_app_id: {github_e2e_app_id}
     github_app_private_key: {github_e2e_app_private_key}
-    slugprefix: /blog
+    sectionmap:
+        default: blog
+        bookmark: bookmarks
 """
 
 

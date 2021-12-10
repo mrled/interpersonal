@@ -66,7 +66,7 @@ class HugoExampleBlog(base.HugoBase):
     collectedmedia:     Permanent media storage if mediastaging is set, otherwise unused.
                         The key is the final media URI, and the value a base.OpaqueFile object.
                         Note that the final media URI is hosted on the blog itself
-                        somewhere under /<slugprefix>/<post slug>/....
+                        somewhere under /<section>/<post slug>/....
 
     TODO: Make this an actual webserver so that it can really serve a blog?
     TODO: At least serve media?
@@ -78,7 +78,7 @@ class HugoExampleBlog(base.HugoBase):
         name,
         uri,
         interpersonal_uri,
-        slugprefix,
+        sectionmap,
         *,
         mediaprefix="",
         mediastaging="",
@@ -90,7 +90,7 @@ class HugoExampleBlog(base.HugoBase):
             name,
             uri,
             interpersonal_uri,
-            slugprefix,
+            sectionmap,
             mediaprefix=mediaprefix,
             mediastaging=mediastaging,
         )
@@ -101,8 +101,10 @@ class HugoExampleBlog(base.HugoBase):
             path = f"/{path}"
         return self.posts[path]
 
-    def _add_raw_post_body(self, slug: str, raw_body: str, body_type: str = "") -> str:
-        ppath = self._post_path(slug)
+    def _add_raw_post_body(
+        self, slug: str, raw_body: str, section: str, body_type: str = ""
+    ) -> str:
+        ppath = self._post_path(slug, section)
         self.posts[f"/{ppath}"] = raw_body
         return f"{self.baseuri}{ppath}"
 
@@ -133,7 +135,7 @@ class HugoExampleBlog(base.HugoBase):
         return items
 
     def _collect_media_for_post(
-        self, postslug: str, postbody: str, media: typing.List[str]
+        self, postslug: str, postbody: str, section: str, media: typing.List[str]
     ) -> str:
         for staging_uri in media:
 
@@ -148,7 +150,7 @@ class HugoExampleBlog(base.HugoBase):
                     f"Media item from URI {staging_uri} has not been saved"
                 )
 
-            new_uri = self._media_item_uri_collected(postslug, staging_uri)
+            new_uri = self._media_item_uri_collected(postslug, section, staging_uri)
             self.collectedmedia[new_uri] = self.media[staging_uri]
             postbody = re.sub(re.escape(staging_uri), new_uri, postbody)
 

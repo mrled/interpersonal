@@ -198,7 +198,7 @@ class HugoGithubRepo(base.HugoBase):
         name,
         uri,
         interpersonal_uri,
-        slugprefix,
+        sectionmap,
         owner: str,
         repo: str,
         branch: str,
@@ -220,7 +220,7 @@ class HugoGithubRepo(base.HugoBase):
             name,
             uri,
             interpersonal_uri,
-            slugprefix,
+            sectionmap,
             mediaprefix=mediaprefix,
             mediastaging=mediastaging,
         )
@@ -273,8 +273,10 @@ class HugoGithubRepo(base.HugoBase):
         )
         return content
 
-    def _add_raw_post_body(self, slug: str, raw_body: str, body_type: str = "") -> str:
-        ppath = self._post_path(slug)
+    def _add_raw_post_body(
+        self, slug: str, raw_body: str, section: str, body_type: str = ""
+    ) -> str:
+        ppath = self._post_path(slug, section)
         if body_type == "html":
             filename = "index.html"
         else:
@@ -401,7 +403,7 @@ class HugoGithubRepo(base.HugoBase):
             )
 
     def _collect_media_for_post(
-        self, postslug: str, postbody: str, media: typing.List[str]
+        self, postslug: str, postbody: str, section: str, media: typing.List[str]
     ) -> str:
         for staging_uri in media:
             if not staging_uri.startswith(self.interpersonal_uri):
@@ -413,12 +415,10 @@ class HugoGithubRepo(base.HugoBase):
             digest = splituri[-2]
             filename = splituri[-1]
             localpath = os.path.join(self.mediastaging, digest, filename)
-            repopath = os.path.join(
-                "content", self.slugprefix, postslug, digest, filename
-            )
+            repopath = os.path.join("content", section, postslug, digest, filename)
             if not os.path.exists(localpath):
                 raise InterpersonalNotFoundError(localpath)
-            new_uri = self._media_item_uri_collected(postslug, staging_uri)
+            new_uri = self._media_item_uri_collected(postslug, section, staging_uri)
             postbody = re.sub(re.escape(staging_uri), new_uri, postbody)
 
             repofile = self._get_repo_file_if_exists(repopath)

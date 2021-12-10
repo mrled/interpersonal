@@ -6,6 +6,7 @@ import typing
 
 import yaml
 
+from interpersonal.configuration.basetypes import SiteSectionMap
 from interpersonal.errors import (
     InterpersonalConfigurationError,
     MicropubBlogNotFoundError,
@@ -70,13 +71,27 @@ class AppConfig:
             if not mediaprefix:
                 mediastaging_sub = os.path.join(mediastaging_base, blog_name)
 
+            key_exc = None
+            type_exc = None
+            try:
+                sectionmap = SiteSectionMap(yamlblog["sectionmap"])
+            except KeyError as exc:
+                key_exc = exc
+            except TypeError as exc:
+                type_exc = exc
+            if key_exc or type_exc:
+                # TODO: Point to documentation with detailed examples of valid configs
+                raise InterpersonalConfigurationError(
+                    f"Blog {blog_name} has invalid or missing sectionmap configuration, check its configuration and make sure it has a 'sectionmap' setting that at least contains a 'post' mapping."
+                )
+
             try:
                 if yamlblog["type"] == "built-in example":
                     blog = example.HugoExampleBlog(
                         yamlblog["name"],
                         yamlblog["uri"],
                         interpersonal_uri,
-                        yamlblog["slugprefix"],
+                        sectionmap,
                         mediaprefix=mediaprefix,
                         mediastaging=mediastaging_sub,
                     )
@@ -85,7 +100,7 @@ class AppConfig:
                         yamlblog["name"],
                         yamlblog["uri"],
                         interpersonal_uri,
-                        yamlblog["slugprefix"],
+                        sectionmap,
                         yamlblog["github_owner"],
                         yamlblog["github_repo"],
                         yamlblog["github_repo_branch"],

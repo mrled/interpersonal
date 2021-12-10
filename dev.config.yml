@@ -10,11 +10,14 @@ blogs:
   - name: example
     type: built-in example
     uri: https://example.com/
-    slugprefix: /blog
+    sectionmap:
+      post: blog
+      bookmark: bookmarks
   # - name: interpersonal-test
   #   type: github
   #   uri: https://interpersonal-test-blog.netlify.app/
-  #   slugprefix: /blog
+  #   sectionmap:
+  #     post: blog
   #   github_owner: mrled
   #   github_repo: interpersonal-test-blog
   #   github_app_id: 1234567890

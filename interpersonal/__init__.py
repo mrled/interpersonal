@@ -5,8 +5,8 @@ import yaml
 from flask import Flask
 
 from interpersonal import database
-from interpersonal.appconfig import AppConfig
 from interpersonal.blueprints import indieauth, micropub, root
+from interpersonal.configuration.appconfig import AppConfig
 
 
 def add_security_headers(resp):
