@@ -24,6 +24,7 @@ class AppConfig:
     password: str
     mediastaging: str
     cookie_secret_key: str
+    csp_remote_trusted_sources: typing.List[str]
     blogs: typing.List[HugoBase]
 
     @classmethod
@@ -44,6 +45,9 @@ class AppConfig:
             password = yamlcontents["password"]
             yamlblogs = yamlcontents["blogs"]
             mediastaging_base = yamlcontents["mediastaging"]
+            csp_remote_trusted_sources = yamlcontents.get(
+                "csp_remote_trusted_sources", []
+            )
         except KeyError as exc:
             key_exc = exc
         if key_exc:
@@ -122,7 +126,15 @@ class AppConfig:
                 )
             blogs += [blog]
 
-        return cls(loglevel, db, password, mediastaging_base, cookie_secret_key, blogs)
+        return cls(
+            loglevel,
+            db,
+            password,
+            mediastaging_base,
+            cookie_secret_key,
+            csp_remote_trusted_sources,
+            blogs,
+        )
 
     def blog(self, name: str) -> HugoBase:
         """Get a blog by name"""

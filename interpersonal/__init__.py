@@ -1,7 +1,7 @@
 import logging
 import os
+import typing
 
-import yaml
 from flask import Flask
 
 from interpersonal import database
@@ -9,7 +9,7 @@ from interpersonal.blueprints import indieauth, micropub, root
 from interpersonal.configuration.appconfig import AppConfig
 
 
-def add_security_headers(resp):
+def add_security_headers(resp, csp_form_action_uris: typing.List[str] = None):
     """Add headers to routes
 
     See also:
@@ -19,8 +19,24 @@ def add_security_headers(resp):
 
     Some of these may be redundant with CSP? Hard to keep track.
     """
+
+    # Note: take care which values require wrapping in single quotes like "form-action 'none';",
+    # and which do not like "form-action https://example.com/form_receiver"
+    csp_form_action_list = ["'self'"] + (csp_form_action_uris or [])
+    csp = {
+        "default-src": "'none'",
+        "script-src": "'self'",
+        "connect-src": "'self'",
+        "img-src": "'self'",
+        "style-src": "'self'",
+        "base-uri": "'self'",
+        "form-action": " ".join(csp_form_action_list),
+        "frame-ancestors": "'none'",
+    }
+    csp_value = "; ".join([f"{k} {v}" for k, v in csp.items()])
+
     headers = {
-        "Content-Security-Policy": "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": csp_value,
         "X-Frame-Options": "DENY",  # Redundant with frame-ancestors ?
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin",
@@ -83,6 +99,6 @@ def create_app(
     # Actually apply the add_security_headers() function to all responses
     @app.after_request
     def addsechead(resp):
-        return add_security_headers(resp)
+        return add_security_headers(resp, appconfig.csp_remote_trusted_sources)
 
     return app

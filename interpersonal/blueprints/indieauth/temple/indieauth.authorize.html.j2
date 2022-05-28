@@ -37,6 +37,13 @@
       <p>Clicking "Submit" will take you to {{ url_for('indieauth.grant', blog_name=blog_name) }}</p>
 
       <button type="submit">Ok</button><br><br>
+
+      <!-- TODO: make this cleaner that a big dumb warning message -->
+      <p>
+        WARNING: if the submit button appears to do nothing, make sure that the redirect site in <code>{{ redirect_uri }}</code> is added to your CSP.
+        (Only the scheme and hostname need to be added, not the path; that is, <code>https://example.com</code> is fine, you don't need to enter <code>https://example.com/some/path</code>. The hostname should be complete or wildcarded in the config, however; if the redirect is to a subdomain like <code>https://x.example.com</code> you will need to use that or a wildcard like <code>https://*.example.com</code>.)
+        This is inconsistent in browsers; currently Safari and Chrome need this, but Firefox will work just fine without it (<a href="https://stackoverflow.com/a/71352313/868206">source</a>). Guess which browser I did my initial testing with! 🙃
+      </p>
     </form>
   </main>
 {% endblock %}
