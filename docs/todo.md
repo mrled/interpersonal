@@ -5,6 +5,7 @@ Bigger todo items that need some explication
 ## Misc
 
 * Uploads are probably not as efficient as they should be. Should I be worried about keeping the whole upload in RAM so I can hash then actually save it?
+* Check for registered redirect link - see later in this document for more info
 
 ## Write a Hugo utility theme to map all URIs directly to the files that back them
 
@@ -31,3 +32,18 @@ However, there are some nonstandard blog things that Micropub assumes are possib
 * Properly handle posts without titles, posts with photos but no title or content, etc
 * Use image filters so that you can upload a photo from your phone's camera roll and pages will load a resized version of it so it's not too big. (Lightboxes and click-to-enlarge functionality would be nice too.)
 * Frontmatter key with `photo`, `video`, and/or `audio` should be displayed even if not referenced in the content.
+
+### Include a client-side Javascript Micropub client
+
+Now this is getting interesting.
+
+Some reference code:
+
+* <https://git.schmarty.net/schmarty/indieauth-authentication>
+
+To do:
+
+* Make sure to handle registration:
+    * <https://indieweb.org/authorization-endpoint#Redirect_URI_verification> says "without registration it's easier to perform a redirect attack"
+    * The above link also points here for more info: <https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2>
+* Implement the `code_challenge` stuff if necessary, research this.
