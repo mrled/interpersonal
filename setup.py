@@ -12,7 +12,7 @@ setuptools.setup(
     description="The connection between my little site and the Indie Web.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/mrled/psyops/",
+    url="https://github.com/mrled/interpersonal/",
     packages=["interpersonal"],
     python_requires=">=3.6",
     include_package_data=True,
